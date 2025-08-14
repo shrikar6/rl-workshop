@@ -1,0 +1,15 @@
+# Core dependencies
+jax[cpu]>=0.7.0,<0.8.0
+optax>=0.2.0,<0.3.0
+gymnasium>=1.0.0,<2.0.0
+matplotlib>=3.10.0,<3.11.0
+
+# Install framework in development mode:
+# pip install -e .
+
+# Development dependencies:
+# pip install -e .[dev]
+
+# Testing dependencies
+pytest>=8.0.0,<9.0.0
+pytest-cov>=6.0.0,<7.0.0
