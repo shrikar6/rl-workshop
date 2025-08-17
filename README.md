@@ -20,3 +20,7 @@ python experiments/cartpole_reinforce.py
 - `experiments/` - Example training scripts
 - `tests/` - Unit tests
 - `results/` - Training outputs
+
+## Contributors
+
+Co-authored with Claude🤓🤖

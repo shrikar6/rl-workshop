@@ -24,6 +24,7 @@ def main():
     num_episodes = 500
     learning_rate = 1e-3
     gamma = 0.99
+    baseline_alpha = 0.01
     hidden_dims = [64, 64]
     backbone_output_dim = 32
     
@@ -42,6 +43,7 @@ def main():
         action_space=env.action_space,
         learning_rate=learning_rate,
         gamma=gamma,
+        baseline_alpha=baseline_alpha,
         seed=seed
     )
     
@@ -61,6 +63,7 @@ def main():
     print(f"Episodes: {num_episodes}")
     print(f"Learning rate: {learning_rate}")
     print(f"Discount factor: {gamma}")
+    print(f"Baseline alpha: {baseline_alpha}")
     print(f"Policy architecture: MLP({hidden_dims}) -> {backbone_output_dim} -> DiscreteHead(2)")
     print()
     

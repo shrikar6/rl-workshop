@@ -132,10 +132,11 @@ class TestREINFORCEAgent:
         test_state = agent.state._replace(
             episode_rewards=[1.0, 1.0, 1.0],
             episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4]) for _ in range(3)],
-            episode_actions=[jnp.array([0]) for _ in range(3)]
+            episode_actions=[jnp.array([0]) for _ in range(3)],
+            baseline=0.0
         )
         
-        updated_params, updated_opt_state = agent._update_policy(test_state)
+        updated_params, updated_opt_state, updated_baseline = agent._update_policy(test_state)
         
         assert updated_params is not None
         assert updated_opt_state is not None
