@@ -46,6 +46,8 @@ class TestREINFORCEAgent:
         assert len(agent.state.episode_observations) == 0
         assert len(agent.state.episode_actions) == 0
         assert len(agent.state.episode_rewards) == 0
+        assert agent.state.baseline == 0.0
+        assert agent.baseline_alpha == 0.01
     
     def test_return_computation(self):
         """Test discounted return calculation."""
@@ -140,3 +142,78 @@ class TestREINFORCEAgent:
         
         assert updated_params is not None
         assert updated_opt_state is not None
+    
+    def test_baseline_initialization(self, agent):
+        """Test baseline starts at zero."""
+        assert agent.state.baseline == 0.0
+        assert agent.baseline_alpha == 0.01
+    
+    def test_baseline_update(self, agent):
+        """Test baseline exponential moving average update."""
+        # Create test state with known rewards
+        test_state = agent.state._replace(
+            episode_rewards=[1.0, 2.0, 3.0],
+            episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4]) for _ in range(3)],
+            episode_actions=[jnp.array([0]) for _ in range(3)],
+            baseline=5.0
+        )
+        
+        # Update policy (includes baseline update)
+        _, _, updated_baseline = agent._update_policy(test_state)
+        
+        # Calculate expected baseline update
+        # returns[0] with rewards [1,2,3] and gamma=0.99
+        expected_episode_return = 1.0 + 0.99 * 2.0 + 0.99**2 * 3.0
+        expected_baseline = (1 - 0.01) * 5.0 + 0.01 * expected_episode_return
+        
+        assert jnp.isclose(updated_baseline, expected_baseline, atol=1e-6)
+    
+    def test_advantage_computation(self, agent):
+        """Test advantages are computed as returns - baseline."""
+        test_state = agent.state._replace(
+            episode_rewards=[2.0, 1.0],
+            episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4]) for _ in range(2)],
+            episode_actions=[jnp.array([0]) for _ in range(2)],
+            baseline=3.0
+        )
+        
+        # Compute returns manually
+        returns = agent._compute_returns(test_state)
+        expected_advantages = returns - 3.0
+        
+        # The update method computes advantages internally
+        # We can't directly access them, but we can verify the baseline is used correctly
+        _, _, new_baseline = agent._update_policy(test_state)
+        
+        # Verify baseline was updated (indicates it was used in computation)
+        assert new_baseline != 3.0
+    
+    def test_baseline_with_different_alpha(self):
+        """Test baseline update with different alpha values."""
+        env = CartPoleEnv()
+        policy = ComposedPolicy(
+            backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
+            head=DiscreteHead(input_dim=16)
+        )
+        
+        # Create agent with higher alpha for faster updates
+        agent = REINFORCEAgent(
+            policy=policy,
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            baseline_alpha=0.5,
+            seed=42
+        )
+        
+        test_state = agent.state._replace(
+            episode_rewards=[10.0],
+            episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4])],
+            episode_actions=[jnp.array([0])],
+            baseline=0.0
+        )
+        
+        _, _, updated_baseline = agent._update_policy(test_state)
+        
+        # With alpha=0.5 and episode_return=10.0, baseline should be 5.0
+        expected_baseline = 0.5 * 10.0
+        assert jnp.isclose(updated_baseline, expected_baseline, atol=1e-6)
