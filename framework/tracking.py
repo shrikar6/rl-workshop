@@ -129,14 +129,16 @@ class Tracker:
         
         print(f"Plot saved to: {plot_path}")
     
-    def log_final(self, success_threshold: Optional[float] = None):
+    def log_final(self, success_threshold: Optional[float] = None, window: Optional[int] = None):
         """
         Log final training results.
         
         Args:
             success_threshold: Optional threshold for success
+            window: Window size for final statistics (defaults to tracker's window)
         """
-        final_returns = self.episode_returns[-self.window:] if len(self.episode_returns) > self.window else self.episode_returns
+        final_window = window if window is not None else self.window
+        final_returns = self.episode_returns[-final_window:] if len(self.episode_returns) > final_window else self.episode_returns
         mean_return = float(jnp.mean(jnp.array(final_returns)))
         
         print(f"\nTraining completed!")

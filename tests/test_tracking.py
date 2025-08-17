@@ -73,6 +73,12 @@ class TestTracker:
         tracker.log_final(success_threshold=30.0)
         captured = capsys.readouterr()
         assert "Environment solved!" in captured.out
+        
+        # Test with custom window
+        tracker.log_final(success_threshold=50.0, window=5)
+        captured = capsys.readouterr()
+        assert "Final average return (last 5 episodes): 70.00" in captured.out  # (50+60+70+80+90)/5
+        assert "Environment solved!" in captured.out
     
     def test_plot_basic(self):
         """Test basic plotting functionality."""

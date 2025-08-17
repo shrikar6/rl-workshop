@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 from framework import (
     CartPoleEnv,
+    AcrobotEnv,
     MLPBackbone,
     DiscreteHead, 
     ComposedPolicy
@@ -25,6 +26,12 @@ def random_key():
 def cartpole_env():
     """Provides a CartPole environment for testing."""
     return CartPoleEnv()
+
+
+@pytest.fixture
+def acrobot_env():
+    """Provides an Acrobot environment for testing."""
+    return AcrobotEnv()
 
 
 @pytest.fixture

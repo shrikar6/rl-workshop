@@ -1,5 +1,5 @@
 """
-Tests for environment implementations.
+Tests for CartPole environment implementation.
 """
 
 import pytest
@@ -98,3 +98,16 @@ def test_cartpole_with_seed():
     
     assert obs1.shape == (4,)
     assert obs2.shape == (4,)
+
+
+def test_cartpole_render_and_close():
+    """Test render and close functionality."""
+    env = CartPoleEnv(render_mode="rgb_array")
+    env.reset()
+    
+    # Test render
+    frame = env.render()
+    assert frame is not None
+    
+    # Test close
+    env.close()  # Should not raise any errors
