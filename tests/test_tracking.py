@@ -77,17 +77,21 @@ class TestTracker:
     def test_plot_basic(self):
         """Test basic plotting functionality."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = Tracker(results_dir=tmpdir, window=10)  # Use reasonable window size
+            tracker = Tracker(
+                results_dir=tmpdir, 
+                window=10,
+                experiment_name="test_experiment"
+            )
             
             # Add some data
             for i in range(20):
                 tracker.episode_returns.append(float(i * 2))
             
             # Create plot
-            tracker.plot("test_experiment")
+            tracker.plot()
             
-            # Check file was created
-            plot_path = Path(tmpdir) / "test_experiment_returns.png"
+            # Check file was created in the experiment directory
+            plot_path = Path(tmpdir) / "test_experiment" / "returns.png"
             assert plot_path.exists()
     
     def test_plot_window_too_large(self):
@@ -98,7 +102,7 @@ class TestTracker:
         # For a tracker with window=100 (default) and only 3 data points, it should still work
         # The window size error happens inside the plot method, not as a parameter
         with pytest.raises(ValueError, match="Window size .* cannot be larger than data length"):
-            tracker.plot("test")
+            tracker.plot()
     
     def test_moving_average_computation(self):
         """Test the moving average is computed correctly."""

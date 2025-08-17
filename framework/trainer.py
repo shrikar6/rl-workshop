@@ -35,10 +35,13 @@ class Trainer:
         self.key = jax.random.PRNGKey(seed)
         self.tracker = tracker
     
-    def train_episode(self) -> float:
+    def train_episode(self, record_video: bool = False) -> float:
         """
         Run one complete episode and return total reward.
         
+        Args:
+            record_video: Whether to record video for this episode
+            
         Returns:
             Total reward accumulated during the episode
         """
@@ -50,6 +53,12 @@ class Trainer:
         agent_state = self.agent.state
         
         while not done:
+            # Record frame if video recording is enabled
+            if record_video and self.tracker is not None:
+                frame = self.env.render()
+                if frame is not None:
+                    self.tracker.add_video_frame(frame)
+            
             # Split keys for action selection and policy updates
             keys = jax.random.split(self.key, 3)
             self.key = keys[0]
@@ -75,7 +84,16 @@ class Trainer:
             num_episodes: Number of episodes to train for
         """
         for episode in range(1, num_episodes + 1):
-            episode_reward = self.train_episode()
+            # Check if we should record video for this episode
+            record_video = False
+            if self.tracker is not None and self.tracker.should_record_video(episode):
+                record_video = True
+            
+            episode_reward = self.train_episode(record_video=record_video)
             
             if self.tracker is not None:
                 self.tracker.add_episode(episode, episode_reward)
+                
+                # Save video if we recorded one
+                if record_video:
+                    self.tracker.save_video(episode)

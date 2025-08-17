@@ -9,8 +9,9 @@ setup(
     install_requires=[
         "jax[cpu]>=0.7.0,<0.8.0",
         "optax>=0.2.0,<0.3.0",
-        "gymnasium>=1.0.0,<2.0.0",
-        "matplotlib>=3.10.0,<3.11.0",
+        "gymnasium[classic-control]>=1.0.0,<2.0.0",
+        "matplotlib>=3.0.0,<4.0.0",
+        "imageio[ffmpeg]>=2.0.0,<3.0.0",
     ],
     extras_require={
         "dev": [

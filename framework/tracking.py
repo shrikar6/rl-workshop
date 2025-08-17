@@ -4,8 +4,10 @@ Unified tracking for RL experiments.
 Handles metrics collection, logging, and visualization in a single class.
 """
 
+import shutil
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import imageio
 from pathlib import Path
 from typing import List, Optional
 
@@ -15,20 +17,40 @@ class Tracker:
     Tracks training progress with logging and visualization.
     """
     
-    def __init__(self, log_interval: int = 10, window: int = 100, results_dir: str = "results"):
+    def __init__(self, log_interval: int = 10, window: int = 100, results_dir: str = "results", 
+                 video_interval: Optional[int] = None, experiment_name: Optional[str] = None):
         """
         Initialize tracker.
         
         Args:
             log_interval: Episodes between progress logs
             window: Number of recent episodes to use for statistics and moving average
-            results_dir: Directory to save plots
+            results_dir: Base directory for results
+            video_interval: Episodes between video recordings (None to disable)
+            experiment_name: Name of the experiment for organizing outputs
         """
         self.episode_returns: List[float] = []
         self.log_interval = log_interval
         self.window = window
-        self.results_dir = Path(results_dir)
-        self.results_dir.mkdir(exist_ok=True)
+        self.video_interval = video_interval
+        self.experiment_name = experiment_name
+        self.current_video_frames: List = []
+        
+        # Set up directory structure: results/{experiment_name}/ and results/{experiment_name}/videos/
+        base_dir = Path(results_dir)
+        if experiment_name:
+            self.results_dir = base_dir / experiment_name
+            self.results_dir.mkdir(parents=True, exist_ok=True)
+            
+            if video_interval is not None:
+                self.videos_dir = self.results_dir / "videos"
+                # Clear existing videos if directory exists
+                if self.videos_dir.exists():
+                    shutil.rmtree(self.videos_dir)
+                self.videos_dir.mkdir(exist_ok=True)
+        else:
+            self.results_dir = base_dir
+            self.results_dir.mkdir(exist_ok=True)
     
     def add_episode(self, episode: int, episode_return: float):
         """
@@ -52,12 +74,29 @@ class Tracker:
                   f"Avg, min, max return (last {len(recent)}): {mean_return:.2f} "
                   f"[{min_return:.2f}, {max_return:.2f}]")
     
-    def plot(self, experiment_name: str):
+    def should_record_video(self, episode: int) -> bool:
+        """Check if we should record video for this episode."""
+        return (self.video_interval is not None and 
+                episode > 0 and 
+                episode % self.video_interval == 0)
+    
+    def add_video_frame(self, frame):
+        """Add a frame to the current video being recorded."""
+        self.current_video_frames.append(frame)
+    
+    def save_video(self, episode: int):
+        """Save collected frames as a video file."""
+        if not self.current_video_frames:
+            return
+        
+        video_path = self.videos_dir / f"episode_{episode}.mp4"
+        imageio.mimsave(video_path, self.current_video_frames, fps=30)
+        print(f"Video saved: {video_path}")
+        self.current_video_frames = []
+    
+    def plot(self):
         """
         Create and save returns plot.
-        
-        Args:
-            experiment_name: Name for the plot file
         """
         returns = jnp.array(self.episode_returns)
         episodes = jnp.arange(1, len(returns) + 1)
@@ -77,12 +116,14 @@ class Tracker:
         
         plt.xlabel('Episode')
         plt.ylabel('Return')
-        plt.title(f'{experiment_name} - Training Progress')
+        title = f'{self.experiment_name} - Training Progress' if self.experiment_name else 'Training Progress'
+        plt.title(title)
         plt.legend()
         plt.grid(True, alpha=0.3)
         
         # Save plot
-        plot_path = self.results_dir / f"{experiment_name}_returns.png"
+        filename = "returns.png"
+        plot_path = self.results_dir / filename
         plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         plt.close()
         

@@ -45,8 +45,13 @@ def main():
         seed=seed
     )
     
-    # Initialize tracker
-    tracker = Tracker(log_interval=10, window=10)
+    # Initialize tracker with video recording
+    tracker = Tracker(
+        log_interval=10, 
+        window=10,
+        video_interval=num_episodes // 10,  # Record video every 10% of training
+        experiment_name="cartpole_reinforce"
+    )
     
     # Create trainer with integrated tracker
     trainer = Trainer(environment=env, agent=agent, seed=seed, tracker=tracker)
@@ -66,7 +71,7 @@ def main():
     tracker.log_final(success_threshold=195.0)
     
     # Generate plot
-    tracker.plot("cartpole_reinforce")
+    tracker.plot()
 
 
 if __name__ == "__main__":

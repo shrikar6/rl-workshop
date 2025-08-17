@@ -16,14 +16,15 @@ class CartPoleEnv(EnvironmentABC):
     - Episode ends when pole falls too far or cart goes out of bounds
     """
     
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, render_mode: Optional[str] = "rgb_array"):
         """
         Initialize CartPole balance environment using Gymnasium.
         
         Args:
             seed: Optional random seed for environment reproducibility
+            render_mode: Render mode for the environment ("human", "rgb_array", or None)
         """
-        self.env = gym.make('CartPole-v1')
+        self.env = gym.make('CartPole-v1', render_mode=render_mode)
         if seed is not None:
             self.env.reset(seed=seed)
     
@@ -63,3 +64,11 @@ class CartPoleEnv(EnvironmentABC):
     def action_space(self) -> gym.Space:
         """Action space: discrete actions {0, 1}"""
         return self.env.action_space
+    
+    def render(self):
+        """Render the environment."""
+        return self.env.render()
+    
+    def close(self):
+        """Close the environment and clean up resources."""
+        self.env.close()
