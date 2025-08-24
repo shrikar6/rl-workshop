@@ -10,6 +10,7 @@ import jax.numpy as jnp
 from framework import (
     CartPoleEnv,
     AcrobotEnv,
+    LunarLanderEnv,
     MLPBackbone,
     DiscreteHead, 
     ComposedPolicy
@@ -32,6 +33,12 @@ def cartpole_env():
 def acrobot_env():
     """Provides an Acrobot environment for testing."""
     return AcrobotEnv()
+
+
+@pytest.fixture
+def lunarlander_env():
+    """Provides a LunarLander environment for testing."""
+    return LunarLanderEnv()
 
 
 @pytest.fixture

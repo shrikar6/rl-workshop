@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Tuple
+from typing import Any, Tuple, Dict
 import gymnasium as gym
 from jax import Array
 from ..policies import PolicyABC
@@ -38,9 +38,9 @@ class AgentABC(ABC):
         pass
     
     @abstractmethod
-    def update(self, state: Any, obs: Array, action: Array, reward: float, next_obs: Array, done: bool, key: Array) -> Any:
+    def update(self, state: Any, obs: Array, action: Array, reward: float, next_obs: Array, done: bool, key: Array) -> Tuple[Any, Dict[str, float]]:
         """
-        Update agent from experience and return new state.
+        Update agent from experience and return new state and metrics.
         
         Args:
             state: Current agent state
@@ -52,6 +52,6 @@ class AgentABC(ABC):
             key: JAX random key for stochastic updates
             
         Returns:
-            New agent state after update
+            Tuple of (new agent state, metrics dict)
         """
         pass

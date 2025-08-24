@@ -9,12 +9,14 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import imageio
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
+import logging
+from datetime import datetime
 
 
 class Tracker:
     """
-    Tracks training progress with logging and visualization.
+    Tracks training progress with logging and visualization for arbitrary metrics.
     """
     
     def __init__(self, log_interval: int = 10, window: int = 100, results_dir: str = "results", 
@@ -29,18 +31,25 @@ class Tracker:
             video_interval: Episodes between video recordings (None to disable)
             experiment_name: Name of the experiment for organizing outputs
         """
-        self.episode_returns: List[float] = []
+        self.metrics: Dict[str, List[float]] = {}
         self.log_interval = log_interval
         self.window = window
         self.video_interval = video_interval
         self.experiment_name = experiment_name
         self.current_video_frames: List = []
+        self.episode_count = 0
         
-        # Set up directory structure: results/{experiment_name}/ and results/{experiment_name}/videos/
+        # Set up directory structure: results/{experiment_name}/
         base_dir = Path(results_dir)
         if experiment_name:
             self.results_dir = base_dir / experiment_name
             self.results_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create subdirectories
+            self.plots_dir = self.results_dir / "plots"
+            self.logs_dir = self.results_dir / "logs"
+            self.plots_dir.mkdir(exist_ok=True)
+            self.logs_dir.mkdir(exist_ok=True)
             
             if video_interval is not None:
                 self.videos_dir = self.results_dir / "videos"
@@ -51,28 +60,47 @@ class Tracker:
         else:
             self.results_dir = base_dir
             self.results_dir.mkdir(exist_ok=True)
+            self.plots_dir = self.results_dir / "plots"
+            self.logs_dir = self.results_dir / "logs"
+            self.plots_dir.mkdir(exist_ok=True)
+            self.logs_dir.mkdir(exist_ok=True)
+            
+        # Set up file logging
+        self._setup_file_logging()
     
-    def add_episode(self, episode: int, episode_return: float):
+    def log_metrics(self, episode: int, metrics: Dict[str, float]):
         """
-        Record episode return and log progress if at interval.
+        Record metrics for the current episode and log progress if at interval.
         
         Args:
             episode: Current episode number (1-indexed)
-            episode_return: Return for the current episode
+            metrics: Dictionary of metric name to value pairs
         """
-        self.episode_returns.append(float(episode_return))
+        # Store metrics
+        for name, value in metrics.items():
+            if name not in self.metrics:
+                self.metrics[name] = []
+            self.metrics[name].append(float(value))
         
+        self.episode_count = episode
+        
+        # Log at intervals
         if episode % self.log_interval == 0:
-            recent = self.episode_returns[-self.window:] if len(self.episode_returns) > self.window else self.episode_returns
-            recent_array = jnp.array(recent)
+            log_str = f"Episode {episode:4d}: "
+            log_parts = []
             
-            mean_return = float(jnp.mean(recent_array))
-            min_return = float(jnp.min(recent_array))
-            max_return = float(jnp.max(recent_array))
+            for name, values in self.metrics.items():
+                recent = values[-self.window:] if len(values) > self.window else values
+                recent_array = jnp.array(recent)
+                mean_val = float(jnp.mean(recent_array))
+                std_val = float(jnp.std(recent_array))
+                log_parts.append(f"{name}: mean={mean_val:.4f}, std={std_val:.4f}")
             
-            print(f"Episode {episode:4d}: "
-                  f"Avg, min, max return (last {len(recent)}): {mean_return:.2f} "
-                  f"[{min_return:.2f}, {max_return:.2f}]")
+            log_message = log_str + " | ".join(log_parts)
+            print(log_message)
+            # Also log to file
+            if hasattr(self, 'file_logger'):
+                self.file_logger.info(log_message)
     
     def should_record_video(self, episode: int) -> bool:
         """Check if we should record video for this episode."""
@@ -94,60 +122,173 @@ class Tracker:
         print(f"Video saved: {video_path}")
         self.current_video_frames = []
     
-    def plot(self):
+    def plot(self, metrics: Optional[List[str]] = None):
         """
-        Create and save returns plot.
-        """
-        returns = jnp.array(self.episode_returns)
-        episodes = jnp.arange(1, len(returns) + 1)
-        
-        # Compute moving average
-        if self.window > len(returns):
-            raise ValueError(f"Window size ({self.window}) cannot be larger than data length ({len(returns)})")
-        
-        kernel = jnp.ones(self.window) / self.window
-        padded = jnp.concatenate([jnp.full(self.window-1, returns[0]), returns])
-        moving_avg = jnp.convolve(padded, kernel, mode='valid')
-        
-        # Create plot
-        plt.figure(figsize=(10, 6))
-        plt.plot(episodes, returns, alpha=0.3, label='Episode returns', color='blue')
-        plt.plot(episodes, moving_avg, label=f'Moving average ({self.window})', color='red', linewidth=2)
-        
-        plt.xlabel('Episode')
-        plt.ylabel('Return')
-        title = f'{self.experiment_name} - Training Progress' if self.experiment_name else 'Training Progress'
-        plt.title(title)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # Save plot
-        filename = "returns.png"
-        plot_path = self.results_dir / filename
-        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
-        plt.close()
-        
-        print(f"Plot saved to: {plot_path}")
-    
-    def log_final(self, success_threshold: Optional[float] = None, window: Optional[int] = None):
-        """
-        Log final training results.
+        Create and save plots for specified metrics.
         
         Args:
+            metrics: List of metric names to plot. If None, plots all tracked metrics.
+        """
+        if not self.metrics:
+            print("No metrics to plot")
+            return
+        
+        # Determine which metrics to plot
+        metrics_to_plot = metrics if metrics is not None else list(self.metrics.keys())
+        metrics_to_plot = [m for m in metrics_to_plot if m in self.metrics]
+        
+        if not metrics_to_plot:
+            print("No valid metrics to plot")
+            return
+        
+        # Create individual plots for each metric
+        for metric_name in metrics_to_plot:
+            fig, (ax_mean, ax_var) = plt.subplots(2, 1, figsize=(10, 8))
+            
+            values = jnp.array(self.metrics[metric_name])
+            episodes = jnp.arange(1, len(values) + 1)
+            
+            # Plot mean subplot
+            ax_mean.plot(episodes, values, alpha=0.3, label=f'{metric_name} (raw)', color='blue')
+            
+            # Compute and plot moving average and variance if we have enough data
+            if len(values) >= self.window:
+                # Compute moving mean
+                kernel = jnp.ones(self.window) / self.window
+                padded = jnp.concatenate([jnp.full(self.window-1, values[0]), values])
+                moving_avg = jnp.convolve(padded, kernel, mode='valid')
+                
+                # Compute moving standard deviation
+                moving_std = jnp.zeros(len(values))
+                for j in range(len(values)):
+                    window_start = max(0, j - self.window + 1)
+                    window_values = values[window_start:j+1]
+                    moving_std = moving_std.at[j].set(float(jnp.std(window_values)))
+                
+                # Plot moving average
+                ax_mean.plot(episodes, moving_avg, label=f'{metric_name} (mean, window={self.window})', 
+                           color='red', linewidth=2)
+                
+                # Plot moving standard deviation
+                ax_var.plot(episodes, moving_std, label=f'{metric_name} (std dev, window={self.window})',
+                          color='green', linewidth=2)
+            
+            # Configure mean subplot
+            ax_mean.set_xlabel('Episode')
+            ax_mean.set_ylabel(f'{metric_name.replace("_", " ").title()} (Mean)')
+            ax_mean.set_title(f'{metric_name.replace("_", " ").title()} - Mean over Training')
+            ax_mean.legend()
+            ax_mean.grid(True, alpha=0.3)
+            
+            # Configure standard deviation subplot
+            ax_var.set_xlabel('Episode')
+            ax_var.set_ylabel(f'{metric_name.replace("_", " ").title()} (Std Dev)')
+            ax_var.set_title(f'{metric_name.replace("_", " ").title()} - Standard Deviation over Training')
+            ax_var.legend()
+            ax_var.grid(True, alpha=0.3)
+            
+            # Overall title
+            if self.experiment_name:
+                fig.suptitle(f'{self.experiment_name} - {metric_name.replace("_", " ").title()}', fontsize=14, y=1.02)
+            
+            plt.tight_layout()
+            
+            # Save plot with metric name in filename in plots subdirectory
+            filename = f"{metric_name}.png"
+            plot_path = self.plots_dir / filename
+            plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+            plt.close()
+            
+            print(f"Plot saved to: {plot_path}")
+    
+    def log_final(self, metric: str = "return", success_threshold: Optional[float] = None, 
+                  window: Optional[int] = None):
+        """
+        Log final training results for a specific metric.
+        
+        Args:
+            metric: Name of the metric to report on
             success_threshold: Optional threshold for success
             window: Window size for final statistics (defaults to tracker's window)
         """
-        final_window = window if window is not None else self.window
-        final_returns = self.episode_returns[-final_window:] if len(self.episode_returns) > final_window else self.episode_returns
-        mean_return = float(jnp.mean(jnp.array(final_returns)))
+        if metric not in self.metrics:
+            print(f"Metric '{metric}' not found in tracked metrics")
+            return
         
-        print(f"\nTraining completed!")
-        print(f"Total episodes: {len(self.episode_returns)}")
-        print(f"Final average return (last {len(final_returns)} episodes): {mean_return:.2f}")
+        values = self.metrics[metric]
+        final_window = window if window is not None else self.window
+        final_values = values[-final_window:] if len(values) > final_window else values
+        final_array = jnp.array(final_values)
+        mean_value = float(jnp.mean(final_array))
+        std_value = float(jnp.std(final_array))
+        
+        final_message = f"\nTraining completed!"
+        episode_message = f"Total episodes: {self.episode_count}"
+        result_message = f"Final {metric} (last {len(final_values)} episodes): mean={mean_value:.2f}, std={std_value:.2f}"
+        
+        print(final_message)
+        print(episode_message)
+        print(result_message)
+        
+        # Also log to file
+        if hasattr(self, 'file_logger'):
+            self.file_logger.info(final_message.strip())
+            self.file_logger.info(episode_message)
+            self.file_logger.info(result_message)
         
         if success_threshold is not None:
             print(f"Success threshold: {success_threshold}")
-            if mean_return >= success_threshold:
+            if mean_value >= success_threshold:
                 print("Environment solved!")
             else:
                 print("Environment not yet solved.")
+    
+    def get_metric(self, name: str) -> Optional[List[float]]:
+        """
+        Get all values for a specific metric.
+        
+        Args:
+            name: Name of the metric
+            
+        Returns:
+            List of metric values or None if metric doesn't exist
+        """
+        return self.metrics.get(name)
+    
+    def get_all_metrics(self) -> Dict[str, List[float]]:
+        """
+        Get all tracked metrics.
+        
+        Returns:
+            Dictionary of all metrics and their values
+        """
+        return self.metrics.copy()
+    
+    def _setup_file_logging(self):
+        """Set up file logging for training progress."""
+        # Create logger
+        self.file_logger = logging.getLogger(f'tracker_{id(self)}')
+        self.file_logger.setLevel(logging.INFO)
+        
+        # Avoid duplicate handlers
+        if self.file_logger.handlers:
+            self.file_logger.handlers.clear()
+        
+        # Create file handler
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_filename = f'training_{timestamp}.log'
+        log_path = self.logs_dir / log_filename
+        
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setLevel(logging.INFO)
+        
+        # Create formatter
+        formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        file_handler.setFormatter(formatter)
+        
+        # Add handler to logger
+        self.file_logger.addHandler(file_handler)
+        
+        # Log experiment start
+        self.file_logger.info(f'Training experiment started: {self.experiment_name or "unnamed"}')
+        print(f"Logging to: {log_path}")

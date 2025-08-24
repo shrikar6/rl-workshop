@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 import optax
 import gymnasium as gym
-from typing import List, NamedTuple, Any, Tuple
+from typing import List, NamedTuple, Any, Tuple, Dict
 from jax import Array
 from ..policies import PolicyABC
 from .base import AgentABC
@@ -126,9 +126,9 @@ class REINFORCEAgent(AgentABC):
         next_obs: Array, 
         done: bool, 
         key: Array
-    ) -> REINFORCEState:
+    ) -> Tuple[REINFORCEState, Dict[str, float]]:
         """
-        Store rewards and update policy at episode end, returning new state.
+        Store rewards and update policy at episode end, returning new state and metrics.
         
         REINFORCE waits until the episode is complete before updating,
         because it needs the full trajectory to compute returns.
@@ -143,7 +143,7 @@ class REINFORCEAgent(AgentABC):
             key: Random key (unused in this update)
             
         Returns:
-            New agent state after update
+            Tuple of (new agent state, metrics dict)
         """
         # Add reward to episode buffer
         new_state = state._replace(
@@ -153,7 +153,7 @@ class REINFORCEAgent(AgentABC):
         # Only update when episode is complete
         if done:
             # Update policy and baseline, then clear buffers for next episode
-            updated_params, updated_opt_state, updated_baseline = self._update_policy(new_state)
+            updated_params, updated_opt_state, updated_baseline, metrics = self._update_policy(new_state)
             return REINFORCEState(
                 policy_params=updated_params,
                 opt_state=updated_opt_state,
@@ -161,9 +161,9 @@ class REINFORCEAgent(AgentABC):
                 episode_actions=[],
                 episode_rewards=[],
                 baseline=updated_baseline
-            )
+            ), metrics
         else:
-            return new_state
+            return new_state, {}
     
     def _compute_returns(self, state: REINFORCEState) -> Array:
         """
@@ -206,7 +206,7 @@ class REINFORCEAgent(AgentABC):
         # Reverse returns back to chronological order
         return returns[::-1]
     
-    def _update_policy(self, state: REINFORCEState) -> Tuple[Any, Any, float]:
+    def _update_policy(self, state: REINFORCEState) -> Tuple[Any, Any, float, Dict[str, float]]:
         """
         Update policy parameters using REINFORCE gradient estimator with baseline.
         
@@ -219,7 +219,7 @@ class REINFORCEAgent(AgentABC):
             state: Current agent state
             
         Returns:
-            Tuple of (updated_policy_params, updated_opt_state, updated_baseline)
+            Tuple of (updated_policy_params, updated_opt_state, updated_baseline, metrics)
         """
         # Compute returns for all timesteps
         returns = self._compute_returns(state)
@@ -234,7 +234,8 @@ class REINFORCEAgent(AgentABC):
         
         # Compute advantages by subtracting baseline from returns
         advantages = returns - state.baseline
-        
+        advantages /= jnp.std(advantages) + 1e-8  # Normalize advantages
+
         # Define loss function for policy gradient
         def policy_loss(params):
             """
@@ -260,4 +261,16 @@ class REINFORCEAgent(AgentABC):
         updates, new_opt_state = self.optimizer.update(grads, state.opt_state)
         new_policy_params = optax.apply_updates(state.policy_params, updates)
         
-        return new_policy_params, new_opt_state, updated_baseline
+        # Compute metrics to track
+        loss_value = policy_loss(state.policy_params)
+        grad_norm = optax.global_norm(grads)
+        mean_advantage = jnp.mean(advantages)
+        
+        metrics = {
+            "policy_loss": float(loss_value),
+            "baseline": float(updated_baseline),
+            "mean_advantage": float(mean_advantage),
+            "grad_norm": float(grad_norm)
+        }
+        
+        return new_policy_params, new_opt_state, updated_baseline, metrics

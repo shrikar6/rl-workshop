@@ -70,7 +70,7 @@ def main():
     trainer.train(num_episodes)
     
     # Final results
-    tracker.log_final(success_threshold=-100.0, window=num_episodes//10)  # Acrobot success is around -100 to -120
+    tracker.log_final(metric="return", success_threshold=-100.0, window=num_episodes//10)  # Acrobot success is around -100 to -120
     
     # Generate plot
     tracker.plot()

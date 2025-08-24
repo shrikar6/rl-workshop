@@ -33,6 +33,7 @@ htmlcov/
 
 # Logs
 *.log
+results/*/logs/
 
 # Videos
 results/*/videos/

@@ -1,5 +1,5 @@
 import jax
-from typing import Optional
+from typing import Optional, Dict
 from .environments import EnvironmentABC
 from .agents import AgentABC
 from .tracking import Tracker
@@ -35,19 +35,20 @@ class Trainer:
         self.key = jax.random.PRNGKey(seed)
         self.tracker = tracker
     
-    def train_episode(self, record_video: bool = False) -> float:
+    def train_episode(self, record_video: bool = False) -> Dict[str, float]:
         """
-        Run one complete episode and return total reward.
+        Run one complete episode and return metrics dict.
         
         Args:
             record_video: Whether to record video for this episode
             
         Returns:
-            Total reward accumulated during the episode
+            Dictionary containing episode metrics including total reward
         """
         obs = self.env.reset()
         total_reward = 0.0
         done = False
+        episode_metrics = {}
         
         # Start with current agent state
         agent_state = self.agent.state
@@ -66,7 +67,11 @@ class Trainer:
             action, agent_state = self.agent.select_action(agent_state, obs, keys[1])
             next_obs, reward, done = self.env.step(action)
             
-            agent_state = self.agent.update(agent_state, obs, action, reward, next_obs, done, keys[2])
+            agent_state, step_metrics = self.agent.update(agent_state, obs, action, reward, next_obs, done, keys[2])
+            
+            # Collect metrics from agent updates (only when episode ends)
+            if step_metrics:
+                episode_metrics.update(step_metrics)
             
             obs = next_obs
             total_reward += reward
@@ -74,7 +79,10 @@ class Trainer:
         # Update agent's state after episode
         self.agent.state = agent_state
         
-        return total_reward
+        # Always include episode return in metrics
+        episode_metrics["return"] = total_reward
+        
+        return episode_metrics
     
     def train(self, num_episodes: int) -> None:
         """
@@ -89,10 +97,10 @@ class Trainer:
             if self.tracker is not None and self.tracker.should_record_video(episode):
                 record_video = True
             
-            episode_reward = self.train_episode(record_video=record_video)
+            episode_metrics = self.train_episode(record_video=record_video)
             
             if self.tracker is not None:
-                self.tracker.add_episode(episode, episode_reward)
+                self.tracker.log_metrics(episode, episode_metrics)
                 
                 # Save video if we recorded one
                 if record_video:

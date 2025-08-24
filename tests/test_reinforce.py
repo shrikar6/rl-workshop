@@ -96,12 +96,12 @@ class TestREINFORCEAgent:
         assert len(new_state.episode_actions) == 1
         assert len(new_state.episode_rewards) == 0
         
-        new_state = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
+        new_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
         
         assert len(new_state.episode_rewards) == 1
         assert len(new_state.episode_observations) == 1
         
-        final_state = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
+        final_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
         
         assert len(final_state.episode_observations) == 0
         assert len(final_state.episode_actions) == 0
@@ -117,7 +117,7 @@ class TestREINFORCEAgent:
         
         key, action_key = jax.random.split(key)
         action, new_state = agent.select_action(agent.state, obs, action_key)
-        new_state = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
+        new_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
         
         params_unchanged = jax.tree.map(
             lambda x, y: jnp.allclose(x, y),
@@ -125,7 +125,7 @@ class TestREINFORCEAgent:
         )
         assert jax.tree_util.tree_all(params_unchanged)
         
-        final_state = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
+        final_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
         
         assert len(final_state.episode_observations) == 0
     
@@ -138,7 +138,7 @@ class TestREINFORCEAgent:
             baseline=0.0
         )
         
-        updated_params, updated_opt_state, updated_baseline = agent._update_policy(test_state)
+        updated_params, updated_opt_state, updated_baseline, _ = agent._update_policy(test_state)
         
         assert updated_params is not None
         assert updated_opt_state is not None
@@ -159,7 +159,7 @@ class TestREINFORCEAgent:
         )
         
         # Update policy (includes baseline update)
-        _, _, updated_baseline = agent._update_policy(test_state)
+        _, _, updated_baseline, _ = agent._update_policy(test_state)
         
         # Calculate expected baseline update
         # returns[0] with rewards [1,2,3] and gamma=0.99
@@ -183,7 +183,7 @@ class TestREINFORCEAgent:
         
         # The update method computes advantages internally
         # We can't directly access them, but we can verify the baseline is used correctly
-        _, _, new_baseline = agent._update_policy(test_state)
+        _, _, new_baseline, _ = agent._update_policy(test_state)
         
         # Verify baseline was updated (indicates it was used in computation)
         assert new_baseline != 3.0
@@ -212,7 +212,7 @@ class TestREINFORCEAgent:
             baseline=0.0
         )
         
-        _, _, updated_baseline = agent._update_policy(test_state)
+        _, _, updated_baseline, _ = agent._update_policy(test_state)
         
         # With alpha=0.5 and episode_return=10.0, baseline should be 5.0
         expected_baseline = 0.5 * 10.0

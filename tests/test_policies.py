@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 import gymnasium as gym
 from framework import MLPBackbone, DiscreteHead, ComposedPolicy
-from framework.utils import get_input_dim, get_action_dim
 
 
 class TestMLPBackbone:

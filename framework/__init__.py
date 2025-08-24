@@ -16,7 +16,7 @@ from .tracking import Tracker
 
 # Commonly used components
 from .agents import REINFORCEAgent
-from .environments import CartPoleEnv, AcrobotEnv
+from .environments import CartPoleEnv, AcrobotEnv, LunarLanderEnv
 from .policies import ComposedPolicy
 from .policies.backbones import MLPBackbone
 from .policies.heads import DiscreteHead

@@ -2,10 +2,9 @@
 Tests for Trainer class.
 """
 
-import pytest
-import jax
+import tempfile
 import jax.numpy as jnp
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from framework import Trainer, Tracker
 from framework.environments.base import EnvironmentABC
 from framework.agents.base import AgentABC
@@ -57,7 +56,7 @@ class MockAgent(AgentABC):
     
     def update(self, state, obs, action, reward, next_obs, done, key):
         self.update_calls.append((state, obs, action, reward, next_obs, done, key))
-        return state
+        return state, {}
 
 
 class TestTrainer:
@@ -75,12 +74,13 @@ class TestTrainer:
         
     def test_trainer_initialization_with_tracker(self):
         """Test trainer initialization with tracker."""
-        env = MockEnvironment()
-        agent = MockAgent()
-        tracker = Tracker()
-        trainer = Trainer(env, agent, seed=42, tracker=tracker)
-        
-        assert trainer.tracker == tracker
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = MockEnvironment()
+            agent = MockAgent()
+            tracker = Tracker(results_dir=tmpdir)
+            trainer = Trainer(env, agent, seed=42, tracker=tracker)
+            
+            assert trainer.tracker == tracker
         
     def test_train_episode(self):
         """Test single episode training."""
@@ -88,10 +88,10 @@ class TestTrainer:
         agent = MockAgent(fixed_action=1)
         trainer = Trainer(env, agent, seed=42)
         
-        episode_reward = trainer.train_episode()
+        episode_metrics = trainer.train_episode()
         
         # Check episode reward
-        assert episode_reward == 3.0  # 3 steps * 1.0 reward per step
+        assert episode_metrics["return"] == 3.0  # 3 steps * 1.0 reward per step
         
         # Check agent interactions
         assert len(agent.select_action_calls) == 3
@@ -115,22 +115,24 @@ class TestTrainer:
         
     def test_train_with_tracker(self, capsys):
         """Test training with tracker integration."""
-        env = MockEnvironment(episode_length=2, reward_per_step=1.5)
-        agent = MockAgent()
-        tracker = Tracker(log_interval=1)  # Log every episode
-        trainer = Trainer(env, agent, seed=42, tracker=tracker)
-        
-        trainer.train(num_episodes=2)
-        
-        # Check tracker received episode data
-        assert len(tracker.episode_returns) == 2
-        assert tracker.episode_returns[0] == 3.0  # 2 steps * 1.5 reward
-        assert tracker.episode_returns[1] == 3.0
-        
-        # Check logging output
-        captured = capsys.readouterr()
-        assert "Episode    1" in captured.out
-        assert "Episode    2" in captured.out
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = MockEnvironment(episode_length=2, reward_per_step=1.5)
+            agent = MockAgent()
+            tracker = Tracker(log_interval=1, results_dir=tmpdir)  # Log every episode
+            trainer = Trainer(env, agent, seed=42, tracker=tracker)
+            
+            trainer.train(num_episodes=2)
+            
+            # Check tracker received episode data
+            returns = tracker.get_metric("return")
+            assert len(returns) == 2
+            assert returns[0] == 3.0  # 2 steps * 1.5 reward
+            assert returns[1] == 3.0
+            
+            # Check logging output
+            captured = capsys.readouterr()
+            assert "Episode    1" in captured.out
+            assert "Episode    2" in captured.out
         
     def test_train_without_tracker_no_logging(self, capsys):
         """Test that training without tracker produces no log output."""
@@ -152,10 +154,10 @@ class TestTrainer:
             trainer = Trainer(env, agent, seed=999)
             return trainer.train_episode()
         
-        reward1 = create_trainer_and_run()
-        reward2 = create_trainer_and_run()
+        metrics1 = create_trainer_and_run()
+        metrics2 = create_trainer_and_run()
         
-        assert reward1 == reward2
+        assert metrics1["return"] == metrics2["return"]
         
     def test_different_seeds_different_keys(self):
         """Test that different seeds produce different key sequences."""

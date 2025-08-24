@@ -1,8 +1,6 @@
 """Test video recording functionality."""
 
-import pytest
 import tempfile
-import shutil
 from pathlib import Path
 import numpy as np
 
@@ -31,43 +29,46 @@ def test_tracker_video_directory_creation():
 
 def test_tracker_should_record_video():
     """Test that should_record_video returns True at correct intervals."""
-    tracker = Tracker(video_interval=50)
-    
-    # Should not record on episode 0
-    assert not tracker.should_record_video(0)
-    
-    # Should not record on non-interval episodes
-    assert not tracker.should_record_video(25)
-    assert not tracker.should_record_video(49)
-    
-    # Should record on interval episodes
-    assert tracker.should_record_video(50)
-    assert tracker.should_record_video(100)
-    assert tracker.should_record_video(150)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tracker = Tracker(video_interval=50, results_dir=tmpdir)
+        
+        # Should not record on episode 0
+        assert not tracker.should_record_video(0)
+        
+        # Should not record on non-interval episodes
+        assert not tracker.should_record_video(25)
+        assert not tracker.should_record_video(49)
+        
+        # Should record on interval episodes
+        assert tracker.should_record_video(50)
+        assert tracker.should_record_video(100)
+        assert tracker.should_record_video(150)
 
 
 def test_tracker_no_video_when_disabled():
     """Test that video recording is disabled when video_interval is None."""
-    tracker = Tracker(video_interval=None)
-    
-    assert not tracker.should_record_video(50)
-    assert not tracker.should_record_video(100)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tracker = Tracker(video_interval=None, results_dir=tmpdir)
+        
+        assert not tracker.should_record_video(50)
+        assert not tracker.should_record_video(100)
 
 
 def test_video_frame_collection():
     """Test that frames are collected and cleared properly."""
-    tracker = Tracker(video_interval=50)
-    
-    # Add some dummy frames
-    frame1 = np.zeros((64, 64, 3), dtype=np.uint8)
-    frame2 = np.ones((64, 64, 3), dtype=np.uint8) * 255
-    
-    tracker.add_video_frame(frame1)
-    tracker.add_video_frame(frame2)
-    
-    assert len(tracker.current_video_frames) == 2
-    assert np.array_equal(tracker.current_video_frames[0], frame1)
-    assert np.array_equal(tracker.current_video_frames[1], frame2)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tracker = Tracker(video_interval=50, results_dir=tmpdir)
+        
+        # Add some dummy frames
+        frame1 = np.zeros((64, 64, 3), dtype=np.uint8)
+        frame2 = np.ones((64, 64, 3), dtype=np.uint8) * 255
+        
+        tracker.add_video_frame(frame1)
+        tracker.add_video_frame(frame2)
+        
+        assert len(tracker.current_video_frames) == 2
+        assert np.array_equal(tracker.current_video_frames[0], frame1)
+        assert np.array_equal(tracker.current_video_frames[1], frame2)
 
 
 def test_integration_with_trainer():
