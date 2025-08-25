@@ -23,22 +23,11 @@ class MLPBackbone(BackboneABC):
         )
     """
     
-    def __init__(self, hidden_dims: Sequence[int], output_dim: int, activation=jax.nn.relu):
+    @staticmethod
+    @jax.jit
+    def forward(params: Any, observation: Array) -> Array:
         """
-        Initialize MLP backbone architecture.
-        
-        Args:
-            hidden_dims: Sizes of hidden layers
-            output_dim: Dimensionality of feature output (must match head input_dim)
-            activation: Activation function to use between layers
-        """
-        super().__init__(output_dim)
-        self.hidden_dims = tuple(hidden_dims)
-        self.activation = activation
-    
-    def __call__(self, params: Any, observation: Array) -> Array:
-        """
-        Extract features from observations using the MLP.
+        JIT-compiled MLP forward pass with ReLU activation.
         
         Args:
             params: MLP parameters (list of (weight, bias) tuples)
@@ -49,12 +38,21 @@ class MLPBackbone(BackboneABC):
         """
         x = observation
         for w, b in params[:-1]:
-            x = self.activation(jnp.dot(x, w) + b)
+            x = jax.nn.relu(jnp.dot(x, w) + b)
         
         w_final, b_final = params[-1]
-        features = jnp.dot(x, w_final) + b_final
+        return jnp.dot(x, w_final) + b_final
+    
+    def __init__(self, hidden_dims: Sequence[int], output_dim: int):
+        """
+        Initialize MLP backbone architecture.
         
-        return features
+        Args:
+            hidden_dims: Sizes of hidden layers
+            output_dim: Dimensionality of feature output (must match head input_dim)
+        """
+        super().__init__(output_dim)
+        self.hidden_dims = tuple(hidden_dims)
     
     def init_params(self, key: Array, observation_space: gym.Space) -> Any:
         """

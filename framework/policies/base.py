@@ -14,9 +14,9 @@ class PolicyABC(ABC):
     """
     
     @abstractmethod
-    def __call__(self, params: Any, observation: Array, key: Array) -> Array:
+    def sample_action(self, params: Any, observation: Array, key: Array) -> Array:
         """
-        Compute action given parameters, observation, and random key.
+        Sample action given parameters, observation, and random key.
         
         Args:
             params: Policy parameters (neural network weights, etc.)
@@ -24,7 +24,7 @@ class PolicyABC(ABC):
             key: JAX random key for stochastic policies
             
         Returns:
-            Action to take in the environment
+            Action sampled from the policy distribution
         """
         pass
     

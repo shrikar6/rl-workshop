@@ -88,7 +88,9 @@ class TestTrainer:
         agent = MockAgent(fixed_action=1)
         trainer = Trainer(env, agent, seed=42)
         
-        episode_metrics = trainer.train_episode()
+        agent_state, trainer_key, episode_metrics = trainer.train_episode(
+            trainer.agent.state, trainer.key
+        )
         
         # Check episode reward
         assert episode_metrics["return"] == 3.0  # 3 steps * 1.0 reward per step
@@ -152,7 +154,10 @@ class TestTrainer:
             env = MockEnvironment(episode_length=2)
             agent = MockAgent()
             trainer = Trainer(env, agent, seed=999)
-            return trainer.train_episode()
+            agent_state, trainer_key, episode_metrics = trainer.train_episode(
+                trainer.agent.state, trainer.key
+            )
+            return episode_metrics
         
         metrics1 = create_trainer_and_run()
         metrics2 = create_trainer_and_run()
@@ -168,8 +173,8 @@ class TestTrainer:
         trainer1 = Trainer(env, agent1, seed=1)
         trainer2 = Trainer(env, agent2, seed=2)
         
-        trainer1.train_episode()
-        trainer2.train_episode()
+        trainer1.train_episode(trainer1.agent.state, trainer1.key)
+        trainer2.train_episode(trainer2.agent.state, trainer2.key)
         
         keys1 = [call[2] for call in agent1.select_action_calls]
         keys2 = [call[2] for call in agent2.select_action_calls]
@@ -183,9 +188,11 @@ class TestTrainer:
         trainer = Trainer(env, agent, seed=42)
         
         initial_key = trainer.key
-        trainer.train_episode()
+        agent_state, new_trainer_key, episode_metrics = trainer.train_episode(
+            trainer.agent.state, trainer.key
+        )
         
-        assert not jnp.array_equal(trainer.key, initial_key)
+        assert not jnp.array_equal(new_trainer_key, initial_key)
         
         action_keys = [call[2] for call in agent.select_action_calls]
         update_keys = [call[6] for call in agent.update_calls]

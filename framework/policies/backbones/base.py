@@ -26,8 +26,9 @@ class BackboneABC(ABC):
         """
         self.output_dim = output_dim
     
+    @staticmethod
     @abstractmethod
-    def __call__(self, params: Any, observation: Array) -> Array:
+    def forward(params: Any, observation: Array) -> Array:
         """
         Extract features from observations.
         

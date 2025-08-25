@@ -25,10 +25,11 @@ class HeadABC(ABC):
         """
         self.input_dim = input_dim
     
+    @staticmethod
     @abstractmethod
-    def __call__(self, params: Any, features: Array, key: Array) -> Array:
+    def sample_action(params: Any, features: Array, key: Array) -> Array:
         """
-        Convert features to actions.
+        Sample action from features.
         
         Args:
             params: Head parameters (neural network weights, etc.)
@@ -54,8 +55,9 @@ class HeadABC(ABC):
         """
         pass
     
+    @staticmethod
     @abstractmethod
-    def get_log_prob(self, params: Any, features: Array, action: Array) -> Array:
+    def get_log_prob(params: Any, features: Array, action: Array) -> Array:
         """
         Compute log probability of action given features.
         

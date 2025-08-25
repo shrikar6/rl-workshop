@@ -37,9 +37,11 @@ class DiscreteHead(HeadABC):
         """
         super().__init__(input_dim)
     
-    def __call__(self, params: Any, features: Array, key: Array) -> Array:
+    @staticmethod
+    @jax.jit
+    def sample_action(params: Any, features: Array, key: Array) -> Array:
         """
-        Convert features to discrete actions.
+        JIT-compiled discrete action sampling.
         
         Args:
             params: Head parameters (weight matrix and bias vector)
@@ -50,58 +52,30 @@ class DiscreteHead(HeadABC):
             Sampled discrete action as Array([action_index])
         """
         w, b = params
-        
         logits = jnp.dot(features, w) + b
         action = jax.random.categorical(key, logits)
         return jnp.array([action])
     
-    def get_action_probs(self, params: Any, features: Array) -> Array:
-        """
-        Get action probabilities without sampling.
-        
-        Args:
-            params: Head parameters
-            features: Feature representation from backbone
-            
-        Returns:
-            Action probability distribution
-        """
-        w, b = params
-        logits = jnp.dot(features, w) + b
-        return jax.nn.softmax(logits)
     
-    def get_log_probs(self, params: Any, features: Array) -> Array:
+    @staticmethod
+    @jax.jit
+    def get_log_prob(params: Any, features: Array, action: Array) -> float:
         """
-        Get log probabilities for all actions.
-        
-        Useful for analysis, debugging, or entropy calculations.
-        
-        Args:
-            params: Head parameters
-            features: Feature representation from backbone
-            
-        Returns:
-            Log probability distribution for all actions
-        """
-        w, b = params
-        logits = jnp.dot(features, w) + b
-        return jax.nn.log_softmax(logits)
-    
-    def get_log_prob(self, params: Any, features: Array, action: Array) -> float:
-        """
-        Get log probability of a specific action.
+        JIT-compiled log probability computation for specific action.
         
         Useful for policy gradient methods that need to compute log π(a|s).
         
         Args:
             params: Head parameters
             features: Feature representation from backbone
-            action: Action as array (consistent with __call__ output)
+            action: Action as array (consistent with sample_action output)
             
         Returns:
             Log probability of the specified action
         """
-        log_probs = self.get_log_probs(params, features)
+        w, b = params
+        logits = jnp.dot(features, w) + b
+        log_probs = jax.nn.log_softmax(logits)
         action_idx = action[0].astype(int)
         return log_probs[action_idx]
     

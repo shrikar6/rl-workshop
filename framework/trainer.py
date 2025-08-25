@@ -35,23 +35,23 @@ class Trainer:
         self.key = jax.random.PRNGKey(seed)
         self.tracker = tracker
     
-    def train_episode(self, record_video: bool = False) -> Dict[str, float]:
+    def train_episode(self, agent_state, trainer_key, record_video: bool = False):
         """
-        Run one complete episode and return metrics dict.
+        Run one complete episode and return new states and metrics.
         
         Args:
+            agent_state: Current agent state
+            trainer_key: Current JAX random key for trainer
             record_video: Whether to record video for this episode
             
         Returns:
-            Dictionary containing episode metrics including total reward
+            Tuple of (new_agent_state, new_trainer_key, episode_metrics)
         """
         obs = self.env.reset()
         total_reward = 0.0
         done = False
         episode_metrics = {}
-        
-        # Start with current agent state
-        agent_state = self.agent.state
+        current_key = trainer_key
         
         while not done:
             # Record frame if video recording is enabled
@@ -61,8 +61,8 @@ class Trainer:
                     self.tracker.add_video_frame(frame)
             
             # Split keys for action selection and policy updates
-            keys = jax.random.split(self.key, 3)
-            self.key = keys[0]
+            keys = jax.random.split(current_key, 3)
+            current_key = keys[0]
             
             action, agent_state = self.agent.select_action(agent_state, obs, keys[1])
             next_obs, reward, done = self.env.step(action)
@@ -76,13 +76,10 @@ class Trainer:
             obs = next_obs
             total_reward += reward
         
-        # Update agent's state after episode
-        self.agent.state = agent_state
-        
         # Always include episode return in metrics
         episode_metrics["return"] = total_reward
         
-        return episode_metrics
+        return agent_state, current_key, episode_metrics
     
     def train(self, num_episodes: int) -> None:
         """
@@ -91,13 +88,20 @@ class Trainer:
         Args:
             num_episodes: Number of episodes to train for
         """
+        # Initialize functional state
+        agent_state = self.agent.state
+        trainer_key = self.key
+        
         for episode in range(1, num_episodes + 1):
             # Check if we should record video for this episode
             record_video = False
             if self.tracker is not None and self.tracker.should_record_video(episode):
                 record_video = True
             
-            episode_metrics = self.train_episode(record_video=record_video)
+            # Run functional episode training
+            agent_state, trainer_key, episode_metrics = self.train_episode(
+                agent_state, trainer_key, record_video=record_video
+            )
             
             if self.tracker is not None:
                 self.tracker.log_metrics(episode, episode_metrics)
@@ -105,3 +109,7 @@ class Trainer:
                 # Save video if we recorded one
                 if record_video:
                     self.tracker.save_video(episode)
+        
+        # Update trainer state after all episodes complete
+        self.agent.state = agent_state
+        self.key = trainer_key

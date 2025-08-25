@@ -107,7 +107,7 @@ class REINFORCEAgent(AgentABC):
             Tuple of (action, new_agent_state)
         """
         # Select action using current policy parameters
-        action = self.policy(state.policy_params, observation, key)
+        action = self.policy.sample_action(state.policy_params, observation, key)
         
         # Create new state with stored observation and action
         new_state = state._replace(
@@ -165,46 +165,43 @@ class REINFORCEAgent(AgentABC):
         else:
             return new_state, {}
     
-    def _compute_returns(self, state: REINFORCEState) -> Array:
+    @staticmethod
+    @jax.jit
+    def _compute_baseline_and_advantages_jit(rewards: Array, gamma: float, old_baseline: float, baseline_alpha: float):
         """
-        Compute discounted returns for each timestep using JAX scan.
+        JIT-compiled helper for computing updated baseline and advantages.
         
-        G_t = r_t + γ*r_{t+1} + γ²*r_{t+2} + ... + γ^{T-t}*r_T
-        
-        Uses jax.lax.scan for efficient computation instead of Python loops.
-        
-        Returns:
-            Array of returns, one per timestep
-        """
-        rewards = jnp.array(state.episode_rewards)
-        
-        def discount_step(carry, reward):
-            """
-            Compute one step of discounted return calculation.
+        Args:
+            rewards: Array of rewards for the episode
+            gamma: Discount factor
+            old_baseline: Current baseline value
+            baseline_alpha: Learning rate for baseline update
             
-            Args:
-                carry: Accumulated return from future timesteps (starts at 0)
-                reward: Current reward being processed
-                
-            Returns:
-                (new_carry, current_return) where:
-                - new_carry: Updated accumulated return for next iteration
-                - current_return: The return value for this timestep
-            """
-            # G_t = r_t + γ * G_{t+1}
-            current_return = reward + self.gamma * carry
+        Returns:
+            Tuple of (updated_baseline, advantages)
+        """
+        def discount_step(carry, reward):
+            current_return = reward + gamma * carry
             return current_return, current_return
         
-        # Process rewards backwards (from end of episode)
-        # rewards[::-1] reverses the array so we start from the last reward
+        # Compute returns
         _, returns = jax.lax.scan(
             discount_step,
-            0.0,  # Initial carry: no future rewards beyond episode end
-            rewards[::-1]  # Process rewards in reverse order
+            0.0,
+            rewards[::-1]
         )
+        returns = returns[::-1]
         
-        # Reverse returns back to chronological order
-        return returns[::-1]
+        # Update baseline using exponential moving average of episode return
+        episode_return = returns[0]  # Return from episode start
+        updated_baseline = (1 - baseline_alpha) * old_baseline + baseline_alpha * episode_return
+        
+        # Compute advantages and normalize
+        advantages = returns - old_baseline
+        advantages = advantages / (jnp.std(advantages) + 1e-8)
+        
+        return updated_baseline, advantages
+
     
     def _update_policy(self, state: REINFORCEState) -> Tuple[Any, Any, float, Dict[str, float]]:
         """
@@ -221,20 +218,15 @@ class REINFORCEAgent(AgentABC):
         Returns:
             Tuple of (updated_policy_params, updated_opt_state, updated_baseline, metrics)
         """
-        # Compute returns for all timesteps
-        returns = self._compute_returns(state)
-        
-        # Update baseline using exponential moving average of episode return
-        episode_return = returns[0]  # Return from episode start
-        updated_baseline = (1 - self.baseline_alpha) * state.baseline + self.baseline_alpha * episode_return
+        # Compute returns, updated baseline, and advantages in single JIT call
+        rewards = jnp.array(state.episode_rewards)
+        updated_baseline, advantages = self._compute_baseline_and_advantages_jit(
+            rewards, self.gamma, state.baseline, self.baseline_alpha
+        )
         
         # Convert episode data to JAX arrays
         observations = jnp.stack(state.episode_observations)
         actions = jnp.stack(state.episode_actions)
-        
-        # Compute advantages by subtracting baseline from returns
-        advantages = returns - state.baseline
-        advantages /= jnp.std(advantages) + 1e-8  # Normalize advantages
 
         # Define loss function for policy gradient
         def policy_loss(params):

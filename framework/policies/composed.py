@@ -5,6 +5,8 @@ from jax import Array
 from .base import PolicyABC
 from .backbones import BackboneABC
 from .heads import HeadABC
+from .backbones.mlp import MLPBackbone
+from .heads.discrete import DiscreteHead
 
 
 class ComposedPolicy(PolicyABC):
@@ -28,6 +30,39 @@ class ComposedPolicy(PolicyABC):
         )
     """
     
+    def sample_action(self, params, observation, key):
+        """
+        Sample action using composed backbone and head.
+        
+        Args:
+            params: Tuple of (backbone_params, head_params)
+            observation: Current state observation
+            key: JAX random key for stochastic policies
+            
+        Returns:
+            Action sampled from the policy distribution
+        """
+        backbone_params, head_params = params
+        features = self.backbone.forward(backbone_params, observation)
+        action = self.head.sample_action(head_params, features, key)
+        return action
+    
+    def get_log_prob(self, params, observation, action):
+        """
+        Compute log probability using composed backbone and head.
+        
+        Args:
+            params: Tuple of (backbone_params, head_params)
+            observation: State observation
+            action: Action taken
+            
+        Returns:
+            Log probability of the action
+        """
+        backbone_params, head_params = params
+        features = self.backbone.forward(backbone_params, observation)
+        return self.head.get_log_prob(head_params, features, action)
+    
     def __init__(self, backbone: BackboneABC, head: HeadABC):
         """
         Initialize composed policy.
@@ -48,24 +83,6 @@ class ComposedPolicy(PolicyABC):
         self.backbone = backbone
         self.head = head
     
-    def __call__(self, params: Any, observation: Array, key: Array) -> Array:
-        """
-        Compute action given parameters, observation, and random key.
-        
-        Args:
-            params: Tuple of (backbone_params, head_params)
-            observation: Current state observation
-            key: JAX random key for stochastic policies
-            
-        Returns:
-            Action to take in the environment
-        """
-        backbone_params, head_params = params
-        
-        features = self.backbone(backbone_params, observation)
-        action = self.head(head_params, features, key)
-        
-        return action
     
     def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Any:
         """
@@ -86,19 +103,3 @@ class ComposedPolicy(PolicyABC):
         
         return (backbone_params, head_params)
     
-    def get_log_prob(self, params: Any, observation: Array, action: Array) -> Array:
-        """
-        Compute log probability of taking action given observation.
-        
-        Args:
-            params: Tuple of (backbone_params, head_params)
-            observation: State observation
-            action: Action taken
-            
-        Returns:
-            Log probability of the action
-        """
-        backbone_params, head_params = params
-        
-        features = self.backbone(backbone_params, observation)
-        return self.head.get_log_prob(head_params, features, action)

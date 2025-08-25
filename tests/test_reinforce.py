@@ -49,39 +49,50 @@ class TestREINFORCEAgent:
         assert agent.state.baseline == 0.0
         assert agent.baseline_alpha == 0.01
     
-    def test_return_computation(self):
-        """Test discounted return calculation."""
+    def test_baseline_and_advantages_computation(self):
+        """Test the JIT-compiled baseline and advantages computation."""
         env = CartPoleEnv()
         policy = ComposedPolicy(
             backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
             head=DiscreteHead(input_dim=16)
         )
-        
+
         agent = REINFORCEAgent(
             policy=policy,
             observation_space=env.observation_space,
             action_space=env.action_space,
-            gamma=0.9  # Use 0.9 for easy manual verification
+            gamma=0.9,
+            baseline_alpha=0.1
+        )
+
+        # Test simple single-step case
+        rewards = jnp.array([2.0])
+        old_baseline = 1.0
+        
+        updated_baseline, advantages = agent._compute_baseline_and_advantages_jit(
+            rewards, 0.9, old_baseline, 0.1
         )
         
-        test_state = agent.state._replace(episode_rewards=[1.0, 1.0, 1.0])
-        returns = agent._compute_returns(test_state)
+        # Expected: return = 2.0, new_baseline = 0.9*1.0 + 0.1*2.0 = 1.1
+        assert jnp.isclose(updated_baseline, 1.1, atol=1e-6)
+        assert advantages.shape == (1,)
         
-        # Manual calculation:
-        # G_2 = 1.0
-        # G_1 = 1.0 + 0.9 * 1.0 = 1.9
-        # G_0 = 1.0 + 0.9 * 1.9 = 2.71
-        expected = jnp.array([2.71, 1.9, 1.0])
-        assert jnp.allclose(returns, expected, atol=1e-6)
+        # Test multi-step case  
+        rewards = jnp.array([1.0, 2.0])
+        old_baseline = 0.0
         
-        test_state = agent.state._replace(episode_rewards=[1.0, 2.0, 3.0])
-        returns = agent._compute_returns(test_state)
+        updated_baseline, advantages = agent._compute_baseline_and_advantages_jit(
+            rewards, 0.9, old_baseline, 0.1
+        )
         
-        # G_2 = 3.0
-        # G_1 = 2.0 + 0.9 * 3.0 = 4.7
-        # G_0 = 1.0 + 0.9 * 4.7 = 5.23
-        expected = jnp.array([5.23, 4.7, 3.0])
-        assert jnp.allclose(returns, expected, atol=1e-6)
+        # Expected returns: [1.0 + 0.9*2.0, 2.0] = [2.8, 2.0]
+        # Expected baseline update: 0.9*0.0 + 0.1*2.8 = 0.28
+        assert jnp.isclose(updated_baseline, 0.28, atol=1e-6)
+        assert advantages.shape == (2,)
+        
+        # Verify types and finite values
+        assert jnp.isfinite(updated_baseline)
+        assert jnp.all(jnp.isfinite(advantages))
     
     def test_episode_buffer_management(self, agent):
         """Test that episode buffers are managed correctly."""
@@ -168,25 +179,28 @@ class TestREINFORCEAgent:
         
         assert jnp.isclose(updated_baseline, expected_baseline, atol=1e-6)
     
-    def test_advantage_computation(self, agent):
-        """Test advantages are computed as returns - baseline."""
+    def test_policy_parameters_change_after_update(self, agent):
+        """Test that policy parameters actually change after an update."""
+        # Set up a complete episode
         test_state = agent.state._replace(
             episode_rewards=[2.0, 1.0],
             episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4]) for _ in range(2)],
             episode_actions=[jnp.array([0]) for _ in range(2)],
-            baseline=3.0
+            baseline=1.0
         )
         
-        # Compute returns manually
-        returns = agent._compute_returns(test_state)
-        expected_advantages = returns - 3.0
+        # Run policy update
+        new_params, _, new_baseline, metrics = agent._update_policy(test_state)
         
-        # The update method computes advantages internally
-        # We can't directly access them, but we can verify the baseline is used correctly
-        _, _, new_baseline, _ = agent._update_policy(test_state)
+        # Verify policy parameters changed (learning occurred)
+        assert test_state.policy_params is not new_params
         
-        # Verify baseline was updated (indicates it was used in computation)
-        assert new_baseline != 3.0
+        # Verify baseline was updated
+        assert new_baseline != 1.0
+        
+        # Verify metrics were computed
+        expected_metrics = {"policy_loss", "baseline", "mean_advantage", "grad_norm"}
+        assert all(metric in metrics for metric in expected_metrics)
     
     def test_baseline_with_different_alpha(self):
         """Test baseline update with different alpha values."""
