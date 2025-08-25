@@ -246,15 +246,14 @@ class REINFORCEAgent(AgentABC):
             loss = -jnp.mean(log_probs * advantages)
             return loss
         
-        # Compute gradients
-        grads = jax.grad(policy_loss)(state.policy_params)
+        # Compute loss value and gradients efficiently in single pass
+        loss_value, grads = jax.value_and_grad(policy_loss)(state.policy_params)
         
         # Apply gradients to update parameters
         updates, new_opt_state = self.optimizer.update(grads, state.opt_state)
         new_policy_params = optax.apply_updates(state.policy_params, updates)
         
         # Compute metrics to track
-        loss_value = policy_loss(state.policy_params)
         grad_norm = optax.global_norm(grads)
         mean_advantage = jnp.mean(advantages)
         
