@@ -46,6 +46,39 @@ class TestMLPBackbone:
         
         assert features.shape == (16,)  # Should match output_dim
         assert jnp.all(jnp.isfinite(features))
+    
+    def test_backbone_different_activations(self, cartpole_env, random_key, sample_observation):
+        """Test that MLPBackbone works with different activation functions."""
+        # Create backbones with different activations
+        relu_backbone = MLPBackbone(hidden_dims=[32], output_dim=16)  # Default relu
+        tanh_backbone = MLPBackbone(hidden_dims=[32], output_dim=16, activation=jax.nn.tanh)
+        elu_backbone = MLPBackbone(hidden_dims=[32], output_dim=16, activation=jax.nn.elu)
+        
+        # Initialize parameters with same key for comparison
+        relu_params = relu_backbone.init_params(random_key, cartpole_env.observation_space)
+        tanh_params = tanh_backbone.init_params(random_key, cartpole_env.observation_space)
+        elu_params = elu_backbone.init_params(random_key, cartpole_env.observation_space)
+        
+        # Forward pass with same observation
+        relu_out = relu_backbone.forward(relu_params, sample_observation)
+        tanh_out = tanh_backbone.forward(tanh_params, sample_observation)
+        elu_out = elu_backbone.forward(elu_params, sample_observation)
+        
+        # All should have correct shape
+        assert relu_out.shape == (16,)
+        assert tanh_out.shape == (16,)
+        assert elu_out.shape == (16,)
+        
+        # All should be finite
+        assert jnp.all(jnp.isfinite(relu_out))
+        assert jnp.all(jnp.isfinite(tanh_out))
+        assert jnp.all(jnp.isfinite(elu_out))
+        
+        # Outputs should differ due to different activations
+        # (even with same initial params, activations transform values differently)
+        assert not jnp.allclose(relu_out, tanh_out)
+        assert not jnp.allclose(relu_out, elu_out)
+        assert not jnp.allclose(tanh_out, elu_out)
 
 
 class TestDiscreteHead:

@@ -37,3 +37,6 @@ results/*/logs/
 
 # Videos
 results/*/videos/
+
+# Temporary files
+tmp/

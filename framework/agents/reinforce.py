@@ -24,6 +24,12 @@ class REINFORCEState(NamedTuple):
     
     All state is immutable - methods return new state objects rather than
     mutating existing state. This enables functional programming patterns.
+    
+    TODO: Performance limitations - This implementation has O(n²) time complexity
+    for episode collection due to list concatenation in select_action() and update().
+    Additionally, lists grow unboundedly which can cause memory issues for very long
+    episodes. These are known limitations that won't be fixed as REINFORCE is intended
+    as a simple baseline/test-bench agent for small toy environments.
     """
     policy_params: Any
     opt_state: Any

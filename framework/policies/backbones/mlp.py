@@ -1,7 +1,8 @@
 import jax
 import jax.numpy as jnp
 import gymnasium as gym
-from typing import Any, Sequence
+from typing import Any, Sequence, Callable, Optional
+from functools import partial
 from jax import Array
 from .base import BackboneABC
 from ...utils import get_input_dim
@@ -19,15 +20,13 @@ class MLPBackbone(BackboneABC):
         backbone = MLPBackbone(
             hidden_dims=[64, 32], 
             output_dim=16,
-            activation=jax.nn.relu
+            activation=jax.nn.relu  # or jax.nn.tanh, jax.nn.elu, etc.
         )
     """
     
-    @staticmethod
-    @jax.jit
-    def forward(params: Any, observation: Array) -> Array:
+    def forward(self, params: Any, observation: Array) -> Array:
         """
-        JIT-compiled MLP forward pass with ReLU activation.
+        MLP forward pass with configurable activation.
         
         Args:
             params: MLP parameters (list of (weight, bias) tuples)
@@ -36,23 +35,46 @@ class MLPBackbone(BackboneABC):
         Returns:
             Feature representation of the observation
         """
+        return self._forward_jit(params, observation, self.activation)
+    
+    @staticmethod
+    @partial(jax.jit, static_argnums=(2,))
+    def _forward_jit(params: Any, observation: Array, activation: Callable[[Array], Array]) -> Array:
+        """
+        JIT-compiled MLP forward pass implementation.
+        
+        Args:
+            params: MLP parameters (list of (weight, bias) tuples)
+            observation: Raw observation from environment
+            activation: Activation function to apply
+            
+        Returns:
+            Feature representation of the observation
+        """
         x = observation
         for w, b in params[:-1]:
-            x = jax.nn.relu(jnp.dot(x, w) + b)
+            x = activation(jnp.dot(x, w) + b)
         
         w_final, b_final = params[-1]
         return jnp.dot(x, w_final) + b_final
     
-    def __init__(self, hidden_dims: Sequence[int], output_dim: int):
+    def __init__(
+        self, 
+        hidden_dims: Sequence[int], 
+        output_dim: int,
+        activation: Optional[Callable[[Array], Array]] = None
+    ):
         """
         Initialize MLP backbone architecture.
         
         Args:
             hidden_dims: Sizes of hidden layers
             output_dim: Dimensionality of feature output (must match head input_dim)
+            activation: Activation function (default: jax.nn.relu)
         """
         super().__init__(output_dim)
         self.hidden_dims = tuple(hidden_dims)
+        self.activation = activation if activation is not None else jax.nn.relu
     
     def init_params(self, key: Array, observation_space: gym.Space) -> Any:
         """
