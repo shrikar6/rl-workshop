@@ -6,7 +6,7 @@ import pytest
 import jax
 import jax.numpy as jnp
 import gymnasium as gym
-from framework import MLPBackbone, DiscretePolicyHead, ComposedNetwork
+from framework import MLPBackbone, DiscretePolicyHead, ComposedPolicyNetwork
 
 
 class TestMLPBackbone:
@@ -135,12 +135,12 @@ class TestDiscretePolicyHead:
         assert log_prob_1 <= 0
 
 
-class TestComposedNetwork:
-    """Tests for ComposedNetwork implementation."""
+class TestComposedPolicyNetwork:
+    """Tests for ComposedPolicyNetwork implementation."""
     
     def test_policy_creation(self, mlp_backbone, discrete_head):
         """Test composed policy creation."""
-        policy = ComposedNetwork(mlp_backbone, discrete_head)
+        policy = ComposedPolicyNetwork(mlp_backbone, discrete_head)
         
         assert policy.backbone == mlp_backbone
         assert policy.head == discrete_head
@@ -151,7 +151,7 @@ class TestComposedNetwork:
         head = DiscretePolicyHead(input_dim=16)            # Expects 16
         
         with pytest.raises(ValueError, match="must match"):
-            ComposedNetwork(backbone, head)
+            ComposedPolicyNetwork(backbone, head)
     
     def test_policy_param_initialization(self, composed_policy, cartpole_env, random_key):
         """Test policy parameter initialization."""

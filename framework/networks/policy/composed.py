@@ -2,34 +2,61 @@ import jax
 import gymnasium as gym
 from typing import Any
 from jax import Array
-from .base import NetworkABC
-from .backbones import BackboneABC
-from .heads import HeadABC
-from .backbones.mlp import MLPBackbone
-from .heads.discrete_policy import DiscretePolicyHead
+from .base import PolicyNetworkABC
+from ..backbones import BackboneABC
+from .heads import PolicyHeadABC
 
 
-class ComposedNetwork(NetworkABC):
+class ComposedPolicyNetwork(PolicyNetworkABC):
     """
-    A network implementation that composes a backbone and head.
+    A policy network that composes a backbone and policy head.
     
     This enables maximum reusability by separating feature extraction (backbone)
-    from output generation (head). Any backbone can be combined with any head.
-    Can be used for policies (with policy heads) or value functions (with Q-heads).
+    from policy output generation (head). Any backbone can be combined with any 
+    policy head for different action spaces and algorithms.
     
     Examples:
-        # For policy (REINFORCE, etc.)
-        policy = ComposedNetwork(
+        # For discrete policy (REINFORCE, PPO, etc.)
+        policy = ComposedPolicyNetwork(
             backbone=MLPBackbone(hidden_dims=[64, 32], output_dim=32),
             head=DiscretePolicyHead(input_dim=32)
         )
-        
-        # For Q-network (DQN, etc.)  
-        q_network = ComposedNetwork(
-            backbone=MLPBackbone(hidden_dims=[64, 32], output_dim=32),
-            head=DiscreteQHead(input_dim=32)
-        )
     """
+    
+    def __init__(self, backbone: BackboneABC, head: PolicyHeadABC):
+        """
+        Initialize composed policy network.
+        
+        Args:
+            backbone: Feature extraction component
+            head: Policy output component
+            
+        Note:
+            backbone.output_dim must match head.input_dim
+        """
+        if backbone.output_dim != head.input_dim:
+            raise ValueError(
+                f"Backbone output dimension ({backbone.output_dim}) must match "
+                f"head input dimension ({head.input_dim})"
+            )
+        
+        self.backbone = backbone
+        self.head = head
+    
+    def forward(self, params, observation):
+        """
+        Raw policy outputs using composed backbone and head.
+        
+        Args:
+            params: Tuple of (backbone_params, head_params)
+            observation: Current state observation
+            
+        Returns:
+            Raw policy outputs (logits for discrete, means for continuous)
+        """
+        backbone_params, head_params = params
+        features = self.backbone.forward(backbone_params, observation)
+        return self.head.forward(head_params, features)
     
     def sample_action(self, params, observation, key):
         """
@@ -38,7 +65,7 @@ class ComposedNetwork(NetworkABC):
         Args:
             params: Tuple of (backbone_params, head_params)
             observation: Current state observation
-            key: JAX random key for stochastic policies
+            key: JAX random key for stochastic action sampling
             
         Returns:
             Action sampled from the policy distribution
@@ -64,30 +91,9 @@ class ComposedNetwork(NetworkABC):
         features = self.backbone.forward(backbone_params, observation)
         return self.head.get_log_prob(head_params, features, action)
     
-    def __init__(self, backbone: BackboneABC, head: HeadABC):
-        """
-        Initialize composed policy.
-        
-        Args:
-            backbone: Feature extraction component
-            head: Action generation component
-            
-        Note:
-            backbone.output_dim must match head.input_dim
-        """
-        if backbone.output_dim != head.input_dim:
-            raise ValueError(
-                f"Backbone output dimension ({backbone.output_dim}) must match "
-                f"head input dimension ({head.input_dim})"
-            )
-        
-        self.backbone = backbone
-        self.head = head
-    
-    
     def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Any:
         """
-        Initialize policy parameters.
+        Initialize network parameters.
         
         Args:
             key: JAX random key for parameter initialization
@@ -103,4 +109,3 @@ class ComposedNetwork(NetworkABC):
         head_params = self.head.init_params(head_key, action_space)
         
         return (backbone_params, head_params)
-    

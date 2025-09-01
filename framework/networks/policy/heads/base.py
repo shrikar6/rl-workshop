@@ -1,0 +1,60 @@
+from abc import abstractmethod
+from typing import Any
+from jax import Array
+from ...base import HeadABC
+
+
+class PolicyHeadABC(HeadABC):
+    """
+    Abstract base class for policy network heads.
+    
+    Policy heads convert features into action distributions for policy-based
+    RL algorithms (REINFORCE, PPO, A2C, etc.).
+    """
+    
+    @staticmethod
+    @abstractmethod
+    def forward(params: Any, features: Array) -> Array:
+        """
+        Raw policy outputs (logits, means, etc.).
+        
+        Args:
+            params: Head parameters
+            features: Feature representation from backbone
+            
+        Returns:
+            Raw policy parameters (logits for discrete, means for continuous)
+        """
+        pass
+    
+    @staticmethod
+    @abstractmethod
+    def sample_action(params: Any, features: Array, key: Array) -> Array:
+        """
+        Sample action from policy distribution.
+        
+        Args:
+            params: Head parameters
+            features: Feature representation from backbone
+            key: JAX random key for stochastic action sampling
+            
+        Returns:
+            Action sampled from the policy distribution
+        """
+        pass
+    
+    @staticmethod
+    @abstractmethod
+    def get_log_prob(params: Any, features: Array, action: Array) -> float:
+        """
+        Compute log probability of action for policy gradients.
+        
+        Args:
+            params: Head parameters
+            features: Feature representation from backbone
+            action: Action taken (as array for consistency)
+            
+        Returns:
+            Log probability of the action
+        """
+        pass

@@ -14,7 +14,7 @@ import optax
 import gymnasium as gym
 from typing import List, NamedTuple, Any, Tuple, Dict
 from jax import Array
-from ..networks import NetworkABC
+from ..networks.policy import PolicyNetworkABC
 from .base import AgentABC
 
 
@@ -52,7 +52,7 @@ class REINFORCEAgent(AgentABC):
     
     def __init__(
         self, 
-        policy: NetworkABC, 
+        policy: PolicyNetworkABC, 
         observation_space: gym.Space,
         action_space: gym.Space,
         learning_rate: float = 1e-3,

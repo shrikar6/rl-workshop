@@ -13,7 +13,7 @@ from framework import (
     LunarLanderEnv,
     MLPBackbone,
     DiscretePolicyHead, 
-    ComposedNetwork
+    ComposedPolicyNetwork
 )
 
 
@@ -62,7 +62,7 @@ def discrete_head():
 @pytest.fixture
 def composed_policy(mlp_backbone, discrete_head):
     """Provides a composed MLP policy for testing."""
-    return ComposedNetwork(mlp_backbone, discrete_head)
+    return ComposedPolicyNetwork(mlp_backbone, discrete_head)
 
 
 @pytest.fixture

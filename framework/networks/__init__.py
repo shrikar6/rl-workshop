@@ -6,7 +6,9 @@ and value functions (state to value mappings). This module provides base classes
 and implementations for different network architectures.
 """
 
-from .base import NetworkABC
-from .composed import ComposedNetwork
+from .base import NetworkABC, HeadABC
 from .backbones import BackboneABC, MLPBackbone
-from .heads import HeadABC, DiscretePolicyHead
+from .policy import PolicyNetworkABC, ComposedPolicyNetwork
+from .policy.heads import PolicyHeadABC, DiscretePolicyHead
+from .value import ValueNetworkABC, ComposedValueNetwork
+from .value.heads import ValueHeadABC

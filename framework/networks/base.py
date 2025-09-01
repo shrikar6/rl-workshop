@@ -4,30 +4,49 @@ import gymnasium as gym
 from jax import Array
 
 
-class NetworkABC(ABC):
+class HeadABC(ABC):
     """
-    Abstract base class for all neural networks.
+    Abstract base class for all network heads.
     
-    A network is a pure function that can be either a policy (maps states to actions)
-    or a value function (maps states to values). This functional design enables easy
-    JIT compilation, vectorization, and clear separation between computation (network)
-    and state management (agent).
+    A head converts feature representations into outputs (actions, Q-values, etc.).
+    Different head types handle different algorithm requirements while working
+    with the same backbone feature extractors.
+    
+    Architecture decisions (input dimension) are made at construction time.
+    Environment binding (action space) happens at parameter initialization time.
     """
     
-    @abstractmethod
-    def sample_action(self, params: Any, observation: Array, key: Array) -> Array:
+    def __init__(self, input_dim: int):
         """
-        Sample action given parameters, observation, and random key.
+        Initialize head architecture.
         
         Args:
-            params: Network parameters (neural network weights, etc.)
-            observation: Current state observation
-            key: JAX random key for stochastic policies
+            input_dim: Dimensionality of input features (must match backbone output_dim)
+        """
+        self.input_dim = input_dim
+    
+    @abstractmethod
+    def init_params(self, key: Array, action_space: gym.Space) -> Any:
+        """
+        Initialize head parameters for a specific action space.
+        
+        Args:
+            key: JAX random key for parameter initialization
+            action_space: Gymnasium space describing actions
             
         Returns:
-            Action sampled from the policy distribution
+            Initial head parameters
         """
         pass
+
+
+class NetworkABC(ABC):
+    """
+    Abstract base class for all networks.
+    
+    A network combines backbones and heads to create complete function approximators.
+    Different network types handle different algorithm requirements (policy vs value).
+    """
     
     @abstractmethod
     def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Any:
@@ -41,24 +60,5 @@ class NetworkABC(ABC):
             
         Returns:
             Initial network parameters
-        """
-        pass
-    
-    @abstractmethod
-    def get_log_prob(self, params: Any, observation: Array, action: Array) -> Array:
-        """
-        Compute log probability of action given observation.
-        
-        Required for policy gradient methods (REINFORCE, PPO, A2C, etc.).
-        For deterministic policies or policies that don't support probability
-        computation, this can raise NotImplementedError.
-        
-        Args:
-            params: Policy parameters
-            observation: Current state observation
-            action: Action taken (as array for consistency)
-            
-        Returns:
-            Log probability of the action
         """
         pass

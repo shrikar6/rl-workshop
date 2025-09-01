@@ -9,9 +9,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 from framework.agents.reinforce import REINFORCEAgent
-from framework.networks.composed import ComposedNetwork
+from framework.networks.policy.composed import ComposedPolicyNetwork
 from framework.networks.backbones.mlp import MLPBackbone
-from framework.networks.heads.discrete_policy import DiscretePolicyHead
+from framework.networks.policy.heads.discrete import DiscretePolicyHead
 from framework.environments.cartpole import CartPoleEnv
 
 
@@ -22,7 +22,7 @@ class TestREINFORCEAgent:
     def agent(self):
         """Create a REINFORCE agent for testing."""
         env = CartPoleEnv()
-        policy = ComposedNetwork(
+        policy = ComposedPolicyNetwork(
             backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
             head=DiscretePolicyHead(input_dim=16)
         )
@@ -52,7 +52,7 @@ class TestREINFORCEAgent:
     def test_baseline_and_advantages_computation(self):
         """Test the JIT-compiled baseline and advantages computation."""
         env = CartPoleEnv()
-        policy = ComposedNetwork(
+        policy = ComposedPolicyNetwork(
             backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
             head=DiscretePolicyHead(input_dim=16)
         )
@@ -205,7 +205,7 @@ class TestREINFORCEAgent:
     def test_baseline_with_different_alpha(self):
         """Test baseline update with different alpha values."""
         env = CartPoleEnv()
-        policy = ComposedNetwork(
+        policy = ComposedPolicyNetwork(
             backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
             head=DiscretePolicyHead(input_dim=16)
         )

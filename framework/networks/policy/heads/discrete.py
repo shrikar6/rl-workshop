@@ -3,10 +3,10 @@ import jax.numpy as jnp
 import gymnasium as gym
 from typing import Any
 from jax import Array
-from .base import HeadABC
+from .base import PolicyHeadABC
 
 
-class DiscretePolicyHead(HeadABC):
+class DiscretePolicyHead(PolicyHeadABC):
     """
     Discrete action head for policy networks.
     
@@ -39,6 +39,22 @@ class DiscretePolicyHead(HeadABC):
     
     @staticmethod
     @jax.jit
+    def forward(params: Any, features: Array) -> Array:
+        """
+        JIT-compiled forward pass to compute logits.
+        
+        Args:
+            params: Head parameters (weight matrix and bias vector)
+            features: Feature representation from backbone
+            
+        Returns:
+            Logits for all actions
+        """
+        w, b = params
+        return jnp.dot(features, w) + b
+    
+    @staticmethod
+    @jax.jit
     def sample_action(params: Any, features: Array, key: Array) -> Array:
         """
         JIT-compiled discrete action sampling.
@@ -51,8 +67,7 @@ class DiscretePolicyHead(HeadABC):
         Returns:
             Sampled discrete action as Array([action_index])
         """
-        w, b = params
-        logits = jnp.dot(features, w) + b
+        logits = DiscretePolicyHead.forward(params, features)
         action = jax.random.categorical(key, logits)
         return jnp.array([action])
     
@@ -73,8 +88,7 @@ class DiscretePolicyHead(HeadABC):
         Returns:
             Log probability of the specified action
         """
-        w, b = params
-        logits = jnp.dot(features, w) + b
+        logits = DiscretePolicyHead.forward(params, features)
         log_probs = jax.nn.log_softmax(logits)
         action_idx = action[0].astype(int)
         return log_probs[action_idx]

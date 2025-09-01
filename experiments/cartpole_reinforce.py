@@ -7,7 +7,7 @@ using an MLP policy with a discrete action head.
 
 from framework import (
     REINFORCEAgent,
-    ComposedNetwork,
+    ComposedPolicyNetwork,
     MLPBackbone,
     DiscretePolicyHead,
     CartPoleEnv,
@@ -33,7 +33,7 @@ def main():
     # Create policy: MLP backbone + discrete head
     backbone = MLPBackbone(hidden_dims=hidden_dims, output_dim=backbone_output_dim)
     head = DiscretePolicyHead(input_dim=backbone_output_dim)
-    policy = ComposedNetwork(backbone, head)
+    policy = ComposedPolicyNetwork(backbone, head)
     
     # Create agent
     agent = REINFORCEAgent(
