@@ -2,31 +2,32 @@ import jax
 import gymnasium as gym
 from typing import Any
 from jax import Array
-from .base import PolicyABC
+from .base import NetworkABC
 from .backbones import BackboneABC
 from .heads import HeadABC
 from .backbones.mlp import MLPBackbone
-from .heads.discrete import DiscreteHead
+from .heads.discrete_policy import DiscretePolicyHead
 
 
-class ComposedPolicy(PolicyABC):
+class ComposedNetwork(NetworkABC):
     """
-    A policy implementation that composes a backbone and head.
+    A network implementation that composes a backbone and head.
     
     This enables maximum reusability by separating feature extraction (backbone)
-    from action generation (head). Any backbone can be combined with any head.
+    from output generation (head). Any backbone can be combined with any head.
+    Can be used for policies (with policy heads) or value functions (with Q-heads).
     
     Examples:
-        # MLP backbone + discrete actions
-        policy = ComposedPolicy(
+        # For policy (REINFORCE, etc.)
+        policy = ComposedNetwork(
             backbone=MLPBackbone(hidden_dims=[64, 32], output_dim=32),
-            head=DiscreteHead(input_dim=32)
+            head=DiscretePolicyHead(input_dim=32)
         )
         
-        # CNN backbone + continuous actions  
-        policy = ComposedPolicy(
-            backbone=CNNBackbone(filters=[32, 64], output_dim=128),
-            head=ContinuousHead(input_dim=128)
+        # For Q-network (DQN, etc.)  
+        q_network = ComposedNetwork(
+            backbone=MLPBackbone(hidden_dims=[64, 32], output_dim=32),
+            head=DiscreteQHead(input_dim=32)
         )
     """
     

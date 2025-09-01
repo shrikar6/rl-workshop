@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 import numpy as np
 
-from framework import Tracker, Trainer, CartPoleEnv, REINFORCEAgent, ComposedPolicy, MLPBackbone, DiscreteHead
+from framework import Tracker, Trainer, CartPoleEnv, REINFORCEAgent, ComposedNetwork, MLPBackbone, DiscretePolicyHead
 
 
 def test_tracker_video_directory_creation():
@@ -78,8 +78,8 @@ def test_integration_with_trainer():
         env = CartPoleEnv(seed=42)
         
         backbone = MLPBackbone(hidden_dims=[32], output_dim=16)
-        head = DiscreteHead(input_dim=16)
-        policy = ComposedPolicy(backbone, head)
+        head = DiscretePolicyHead(input_dim=16)
+        policy = ComposedNetwork(backbone, head)
         
         agent = REINFORCEAgent(
             policy=policy,

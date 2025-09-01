@@ -12,8 +12,8 @@ from framework import (
     AcrobotEnv,
     LunarLanderEnv,
     MLPBackbone,
-    DiscreteHead, 
-    ComposedPolicy
+    DiscretePolicyHead, 
+    ComposedNetwork
 )
 
 
@@ -56,13 +56,13 @@ def mlp_backbone():
 @pytest.fixture
 def discrete_head():
     """Provides a discrete head for testing."""
-    return DiscreteHead(input_dim=16)
+    return DiscretePolicyHead(input_dim=16)
 
 
 @pytest.fixture
 def composed_policy(mlp_backbone, discrete_head):
     """Provides a composed MLP policy for testing."""
-    return ComposedPolicy(mlp_backbone, discrete_head)
+    return ComposedNetwork(mlp_backbone, discrete_head)
 
 
 @pytest.fixture

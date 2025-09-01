@@ -7,9 +7,9 @@ using an MLP policy with a discrete action head.
 
 from framework import (
     REINFORCEAgent,
-    ComposedPolicy,
+    ComposedNetwork,
     MLPBackbone,
-    DiscreteHead,
+    DiscretePolicyHead,
     LunarLanderEnv,
     Trainer,
     Tracker
@@ -32,8 +32,8 @@ def main():
     
     # Create policy: MLP backbone + discrete head (4 actions for LunarLander)
     backbone = MLPBackbone(hidden_dims=hidden_dims, output_dim=backbone_output_dim)
-    head = DiscreteHead(input_dim=backbone_output_dim)
-    policy = ComposedPolicy(backbone, head)
+    head = DiscretePolicyHead(input_dim=backbone_output_dim)
+    policy = ComposedNetwork(backbone, head)
     
     # Create agent
     agent = REINFORCEAgent(
@@ -63,7 +63,7 @@ def main():
     print(f"Learning rate: {learning_rate}")
     print(f"Discount factor: {gamma}")
     print(f"Baseline alpha: {baseline_alpha}")
-    print(f"Policy architecture: MLP({hidden_dims}) -> {backbone_output_dim} -> DiscreteHead(4)")
+    print(f"Policy architecture: MLP({hidden_dims}) -> {backbone_output_dim} -> DiscretePolicyHead(4)")
     print()
     
     # Training loop

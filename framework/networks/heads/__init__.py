@@ -6,4 +6,4 @@ Heads convert backbone features into actions for different action spaces
 """
 
 from .base import HeadABC
-from .discrete import DiscreteHead
+from .discrete_policy import DiscretePolicyHead

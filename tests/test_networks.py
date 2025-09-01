@@ -1,12 +1,12 @@
 """
-Tests for policy implementations.
+Tests for network implementations.
 """
 
 import pytest
 import jax
 import jax.numpy as jnp
 import gymnasium as gym
-from framework import MLPBackbone, DiscreteHead, ComposedPolicy
+from framework import MLPBackbone, DiscretePolicyHead, ComposedNetwork
 
 
 class TestMLPBackbone:
@@ -81,12 +81,12 @@ class TestMLPBackbone:
         assert not jnp.allclose(tanh_out, elu_out)
 
 
-class TestDiscreteHead:
-    """Tests for DiscreteHead implementation."""
+class TestDiscretePolicyHead:
+    """Tests for DiscretePolicyHead implementation."""
     
     def test_head_creation(self):
         """Test discrete head creation."""
-        head = DiscreteHead(input_dim=16)
+        head = DiscretePolicyHead(input_dim=16)
         assert head.input_dim == 16
     
     def test_head_param_initialization(self, discrete_head, cartpole_env, random_key):
@@ -101,7 +101,7 @@ class TestDiscreteHead:
         """Test that head rejects non-discrete action spaces."""
         invalid_space = gym.spaces.Box(-1, 1, shape=(2,))
         
-        with pytest.raises(ValueError, match="DiscreteHead only supports"):
+        with pytest.raises(ValueError, match="DiscretePolicyHead only supports"):
             discrete_head.init_params(random_key, invalid_space)
     
     def test_head_forward_pass(self, discrete_head, cartpole_env, random_key):
@@ -135,12 +135,12 @@ class TestDiscreteHead:
         assert log_prob_1 <= 0
 
 
-class TestComposedPolicy:
-    """Tests for ComposedPolicy implementation."""
+class TestComposedNetwork:
+    """Tests for ComposedNetwork implementation."""
     
     def test_policy_creation(self, mlp_backbone, discrete_head):
         """Test composed policy creation."""
-        policy = ComposedPolicy(mlp_backbone, discrete_head)
+        policy = ComposedNetwork(mlp_backbone, discrete_head)
         
         assert policy.backbone == mlp_backbone
         assert policy.head == discrete_head
@@ -148,10 +148,10 @@ class TestComposedPolicy:
     def test_policy_dimension_mismatch(self):
         """Test that mismatched backbone/head dimensions are caught."""
         backbone = MLPBackbone([64], output_dim=32)  # Output 32
-        head = DiscreteHead(input_dim=16)            # Expects 16
+        head = DiscretePolicyHead(input_dim=16)            # Expects 16
         
         with pytest.raises(ValueError, match="must match"):
-            ComposedPolicy(backbone, head)
+            ComposedNetwork(backbone, head)
     
     def test_policy_param_initialization(self, composed_policy, cartpole_env, random_key):
         """Test policy parameter initialization."""

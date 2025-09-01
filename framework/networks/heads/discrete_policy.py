@@ -6,7 +6,7 @@ from jax import Array
 from .base import HeadABC
 
 
-class DiscreteHead(HeadABC):
+class DiscretePolicyHead(HeadABC):
     """
     Discrete action head for policy networks.
     
@@ -19,12 +19,12 @@ class DiscreteHead(HeadABC):
     
     Example:
         # For CartPole (2 actions: left=0, right=1)
-        head = DiscreteHead(input_dim=32)
+        head = DiscretePolicyHead(input_dim=32)
         
-        # Usage in ComposedPolicy:
-        policy = ComposedPolicy(
+        # Usage in ComposedNetwork:
+        policy = ComposedNetwork(
             backbone=MLPBackbone(hidden_dims=[64, 32], output_dim=32),
-            head=DiscreteHead(input_dim=32)
+            head=DiscretePolicyHead(input_dim=32)
         )
     """
     
@@ -95,7 +95,7 @@ class DiscreteHead(HeadABC):
         """
         if not isinstance(action_space, gym.spaces.Discrete):
             raise ValueError(
-                f"DiscreteHead only supports gym.spaces.Discrete action spaces, "
+                f"DiscretePolicyHead only supports gym.spaces.Discrete action spaces, "
                 f"got {type(action_space)}. For MultiDiscrete or other complex "
                 f"discrete spaces, please use a specialized head."
             )

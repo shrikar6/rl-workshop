@@ -4,13 +4,14 @@ import gymnasium as gym
 from jax import Array
 
 
-class PolicyABC(ABC):
+class NetworkABC(ABC):
     """
-    Abstract base class for all policies.
+    Abstract base class for all neural networks.
     
-    A policy is a pure function that maps (parameters, observation, random_key) -> action.
-    This functional design enables easy JIT compilation, vectorization, and clear
-    separation between computation (policy) and state management (agent).
+    A network is a pure function that can be either a policy (maps states to actions)
+    or a value function (maps states to values). This functional design enables easy
+    JIT compilation, vectorization, and clear separation between computation (network)
+    and state management (agent).
     """
     
     @abstractmethod
@@ -19,7 +20,7 @@ class PolicyABC(ABC):
         Sample action given parameters, observation, and random key.
         
         Args:
-            params: Policy parameters (neural network weights, etc.)
+            params: Network parameters (neural network weights, etc.)
             observation: Current state observation
             key: JAX random key for stochastic policies
             
@@ -31,7 +32,7 @@ class PolicyABC(ABC):
     @abstractmethod
     def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Any:
         """
-        Initialize policy parameters.
+        Initialize network parameters.
         
         Args:
             key: JAX random key for parameter initialization
@@ -39,7 +40,7 @@ class PolicyABC(ABC):
             action_space: Gymnasium space describing actions
             
         Returns:
-            Initial policy parameters
+            Initial network parameters
         """
         pass
     
