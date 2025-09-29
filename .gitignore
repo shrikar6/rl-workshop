@@ -40,3 +40,6 @@ results/*/videos/
 
 # Temporary files
 tmp/
+
+# Project-specific
+CLAUDE.md
