@@ -43,7 +43,7 @@ class ComposedPolicyNetwork(PolicyNetworkABC):
         self.backbone = backbone
         self.head = head
     
-    def forward(self, params, observation):
+    def forward(self, params: Any, observation: Array) -> Array:
         """
         Raw policy outputs using composed backbone and head.
         
@@ -58,7 +58,7 @@ class ComposedPolicyNetwork(PolicyNetworkABC):
         features = self.backbone.forward(backbone_params, observation)
         return self.head.forward(head_params, features)
     
-    def sample_action(self, params, observation, key):
+    def sample_action(self, params: Any, observation: Array, key: Array) -> Array:
         """
         Sample action using composed backbone and head.
         
@@ -75,7 +75,7 @@ class ComposedPolicyNetwork(PolicyNetworkABC):
         action = self.head.sample_action(head_params, features, key)
         return action
     
-    def get_log_prob(self, params, observation, action):
+    def get_log_prob(self, params: Any, observation: Array, action: Array) -> float:
         """
         Compute log probability using composed backbone and head.
         

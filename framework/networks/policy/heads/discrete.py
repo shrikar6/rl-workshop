@@ -69,7 +69,7 @@ class DiscretePolicyHead(PolicyHeadABC):
         """
         logits = DiscretePolicyHead.forward(params, features)
         action = jax.random.categorical(key, logits)
-        return jnp.array([action])
+        return action.reshape(-1)
     
     
     @staticmethod
