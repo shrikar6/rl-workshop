@@ -26,16 +26,15 @@ class BackboneABC(ABC):
         """
         self.output_dim = output_dim
     
-    @staticmethod
     @abstractmethod
-    def forward(params: Any, observation: Array) -> Array:
+    def forward(self, params: Any, observation: Array) -> Array:
         """
         Extract features from observations.
-        
+
         Args:
             params: Backbone parameters (neural network weights, etc.)
             observation: Raw observation from environment
-            
+
         Returns:
             Feature representation of the observation
         """

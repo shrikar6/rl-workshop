@@ -42,12 +42,10 @@ class REINFORCEState(NamedTuple):
 class REINFORCEAgent(AgentABC):
     """
     REINFORCE agent implementation.
-    
-    This agent collects complete episodes and updates the policy using
-    Monte Carlo returns to estimate policy gradients.
-    
-    Follows functional programming principles - all methods are pure functions
-    that return new state rather than mutating existing state.
+
+    Collects complete episodes and updates the policy using Monte Carlo
+    returns to estimate policy gradients. Maintains episode buffers in
+    state and updates only when episodes complete.
     """
     
     def __init__(
@@ -190,13 +188,14 @@ class REINFORCEAgent(AgentABC):
             current_return = reward + gamma * carry
             return current_return, current_return
         
-        # Compute returns
+        # Compute returns using scan (efficient for JAX)
+        # Process rewards in reverse to accumulate discounted returns from end to start
         _, returns = jax.lax.scan(
             discount_step,
             0.0,
             rewards[::-1]
         )
-        returns = returns[::-1]
+        returns = returns[::-1]  # Reverse back to chronological order
         
         # Update baseline using exponential moving average of episode return
         episode_return = returns[0]  # Return from episode start
@@ -204,6 +203,7 @@ class REINFORCEAgent(AgentABC):
         
         # Compute advantages and normalize
         advantages = returns - old_baseline
+        # Normalize to reduce variance in gradient estimates (1e-8 prevents division by zero)
         advantages = advantages / (jnp.std(advantages) + 1e-8)
         
         return updated_baseline, advantages

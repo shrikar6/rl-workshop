@@ -8,15 +8,14 @@ from ..networks import NetworkABC
 class AgentABC(ABC):
     """
     Abstract base class for all reinforcement learning agents.
-    
+
     An agent combines a policy (for action selection) with a learning algorithm
-    (for updating the policy from experience). This separation enables mixing
-    different algorithms with different policy architectures.
-    
-    This interface follows functional programming principles where all methods
-    are pure functions that return new state rather than mutating existing state.
-    Each algorithm defines its own state structure as needed.
-    
+    (for updating the policy from experience).
+
+    Each agent maintains its own state structure (defined as a NamedTuple) and
+    uses functional state management - methods return new state rather than
+    mutating existing state.
+
     Subclasses should implement:
         __init__(self, policy: PolicyABC, observation_space: gym.Space, action_space: gym.Space, **kwargs)
     to initialize with policy and environment space specifications, and create initial state.

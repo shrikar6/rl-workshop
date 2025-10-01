@@ -38,7 +38,7 @@ class MLPBackbone(BackboneABC):
         return self._forward_jit(params, observation, self.activation)
     
     @staticmethod
-    @partial(jax.jit, static_argnums=(2,))
+    @partial(jax.jit, static_argnums=(2,))  # Mark activation as static for JIT
     def _forward_jit(params: Any, observation: Array, activation: Callable[[Array], Array]) -> Array:
         """
         JIT-compiled MLP forward pass implementation.

@@ -37,58 +37,69 @@ class DiscretePolicyHead(PolicyHeadABC):
         """
         super().__init__(input_dim)
     
-    @staticmethod
-    @jax.jit
-    def forward(params: Any, features: Array) -> Array:
+    def forward(self, params: Any, features: Array) -> Array:
         """
-        JIT-compiled forward pass to compute logits.
-        
+        Compute action logits from features.
+
         Args:
             params: Head parameters (weight matrix and bias vector)
             features: Feature representation from backbone
-            
+
         Returns:
             Logits for all actions
         """
-        w, b = params
-        return jnp.dot(features, w) + b
-    
-    @staticmethod
-    @jax.jit
-    def sample_action(params: Any, features: Array, key: Array) -> Array:
+        return self._forward_jit(params, features)
+
+    def sample_action(self, params: Any, features: Array, key: Array) -> Array:
         """
-        JIT-compiled discrete action sampling.
-        
+        Sample discrete action from policy distribution.
+
         Args:
             params: Head parameters (weight matrix and bias vector)
             features: Feature representation from backbone
             key: JAX random key for action sampling
-            
+
         Returns:
             Sampled discrete action as Array([action_index])
         """
-        logits = DiscretePolicyHead.forward(params, features)
-        action = jax.random.categorical(key, logits)
-        return action.reshape(-1)
-    
-    
-    @staticmethod
-    @jax.jit
-    def get_log_prob(params: Any, features: Array, action: Array) -> float:
+        return self._sample_action_jit(params, features, key)
+
+    def get_log_prob(self, params: Any, features: Array, action: Array) -> float:
         """
-        JIT-compiled log probability computation for specific action.
-        
+        Compute log probability of action under policy.
+
         Useful for policy gradient methods that need to compute log π(a|s).
-        
+
         Args:
             params: Head parameters
             features: Feature representation from backbone
             action: Action as array (consistent with sample_action output)
-            
+
         Returns:
             Log probability of the specified action
         """
-        logits = DiscretePolicyHead.forward(params, features)
+        return self._get_log_prob_jit(params, features, action)
+
+    @staticmethod
+    @jax.jit
+    def _forward_jit(params: Any, features: Array) -> Array:
+        """JIT-compiled forward pass to compute logits."""
+        w, b = params
+        return jnp.dot(features, w) + b
+
+    @staticmethod
+    @jax.jit
+    def _sample_action_jit(params: Any, features: Array, key: Array) -> Array:
+        """JIT-compiled discrete action sampling."""
+        logits = DiscretePolicyHead._forward_jit(params, features)
+        action = jax.random.categorical(key, logits)
+        return action.reshape(-1)
+
+    @staticmethod
+    @jax.jit
+    def _get_log_prob_jit(params: Any, features: Array, action: Array) -> float:
+        """JIT-compiled log probability computation."""
+        logits = DiscretePolicyHead._forward_jit(params, features)
         log_probs = jax.nn.log_softmax(logits)
         action_idx = action[0].astype(int)
         return log_probs[action_idx]
@@ -116,7 +127,7 @@ class DiscretePolicyHead(PolicyHeadABC):
         
         num_actions = action_space.n
         
-        # Xavier initialization
+        # Xavier initialization: scale = sqrt(2 / (fan_in + fan_out))
         scale = jnp.sqrt(2.0 / (self.input_dim + num_actions))
         w_key, b_key = jax.random.split(key)
         

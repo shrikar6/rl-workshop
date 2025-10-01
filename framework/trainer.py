@@ -60,7 +60,7 @@ class Trainer:
                 if frame is not None:
                     self.tracker.add_video_frame(frame)
             
-            # Split keys for action selection and policy updates
+            # Split key into 3: next iteration, action selection, update
             keys = jax.random.split(current_key, 3)
             current_key = keys[0]
             
