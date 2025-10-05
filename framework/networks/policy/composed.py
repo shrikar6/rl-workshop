@@ -1,6 +1,6 @@
 import jax
 import gymnasium as gym
-from typing import Any
+from typing import Any, Tuple
 from jax import Array
 from .base import PolicyNetworkABC
 from ..backbones import BackboneABC
@@ -43,14 +43,14 @@ class ComposedPolicyNetwork(PolicyNetworkABC):
         self.backbone = backbone
         self.head = head
     
-    def forward(self, params: Any, observation: Array) -> Array:
+    def forward(self, params: Tuple[Any, Any], observation: Array) -> Array:
         """
         Raw policy outputs using composed backbone and head.
-        
+
         Args:
             params: Tuple of (backbone_params, head_params)
             observation: Current state observation
-            
+
         Returns:
             Raw policy outputs (logits for discrete, means for continuous)
         """
@@ -58,15 +58,15 @@ class ComposedPolicyNetwork(PolicyNetworkABC):
         features = self.backbone.forward(backbone_params, observation)
         return self.head.forward(head_params, features)
     
-    def sample_action(self, params: Any, observation: Array, key: Array) -> Array:
+    def sample_action(self, params: Tuple[Any, Any], observation: Array, key: Array) -> Array:
         """
         Sample action using composed backbone and head.
-        
+
         Args:
             params: Tuple of (backbone_params, head_params)
             observation: Current state observation
             key: JAX random key for stochastic action sampling
-            
+
         Returns:
             Action sampled from the policy distribution
         """
@@ -75,15 +75,15 @@ class ComposedPolicyNetwork(PolicyNetworkABC):
         action = self.head.sample_action(head_params, features, key)
         return action
     
-    def get_log_prob(self, params: Any, observation: Array, action: Array) -> float:
+    def get_log_prob(self, params: Tuple[Any, Any], observation: Array, action: Array) -> float:
         """
         Compute log probability using composed backbone and head.
-        
+
         Args:
             params: Tuple of (backbone_params, head_params)
             observation: State observation
             action: Action taken
-            
+
         Returns:
             Log probability of the action
         """
@@ -91,21 +91,21 @@ class ComposedPolicyNetwork(PolicyNetworkABC):
         features = self.backbone.forward(backbone_params, observation)
         return self.head.get_log_prob(head_params, features, action)
     
-    def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Any:
+    def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Tuple[Any, Any]:
         """
         Initialize network parameters.
-        
+
         Args:
             key: JAX random key for parameter initialization
             observation_space: Gymnasium space describing observations
             action_space: Gymnasium space describing actions
-            
+
         Returns:
             Tuple of (backbone_params, head_params)
         """
         backbone_key, head_key = jax.random.split(key, 2)
-        
+
         backbone_params = self.backbone.init_params(backbone_key, observation_space)
         head_params = self.head.init_params(head_key, action_space)
-        
+
         return (backbone_params, head_params)

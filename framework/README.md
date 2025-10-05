@@ -117,6 +117,29 @@ action = policy.sample_action(params, observation, subkey)
 
 JAX requires explicit randomness for reproducibility and parallelization.
 
+### Type Annotations: Flexible Interfaces, Typed Implementations
+
+**What:** Abstract base classes use `Any` for parameter and state types to maintain plug-and-play flexibility. Concrete implementations use specific types (like `MLPParams`, `Tuple[Array, Array]`, or `REINFORCEState`) to provide IDE support and type checking.
+
+**Example:**
+```python
+# Abstract base class - flexible interface
+class BackboneABC(ABC):
+    @abstractmethod
+    def forward(self, params: Any, observation: Array) -> Array:
+        pass
+
+# Concrete implementation - specific types
+MLPParams = List[Tuple[Array, Array]]
+
+class MLPBackbone(BackboneABC):
+    def forward(self, params: MLPParams, observation: Array) -> Array:
+        # IDE knows params structure, provides autocomplete
+        pass
+```
+
+**Why:** Abstract interfaces use `Any` so different implementations (MLPBackbone, CNNBackbone) can have different parameter structures without type conflicts - this preserves plug-and-play modularity (Priority 1). Concrete implementations use specific types for developer experience - IDE autocomplete, type checking, and discoverability (Priority 3). This balances flexibility at composition boundaries with safety within implementations.
+
 ## Subsystem Documentation
 
 For design decisions specific to subsystems:

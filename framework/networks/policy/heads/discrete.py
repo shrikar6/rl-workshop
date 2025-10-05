@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import gymnasium as gym
-from typing import Any
+from typing import Any, Tuple
 from jax import Array
 from .base import PolicyHeadABC
 
@@ -37,7 +37,7 @@ class DiscretePolicyHead(PolicyHeadABC):
         """
         super().__init__(input_dim)
     
-    def forward(self, params: Any, features: Array) -> Array:
+    def forward(self, params: Tuple[Array, Array], features: Array) -> Array:
         """
         Compute action logits from features.
 
@@ -50,7 +50,7 @@ class DiscretePolicyHead(PolicyHeadABC):
         """
         return self._forward_jit(params, features)
 
-    def sample_action(self, params: Any, features: Array, key: Array) -> Array:
+    def sample_action(self, params: Tuple[Array, Array], features: Array, key: Array) -> Array:
         """
         Sample discrete action from policy distribution.
 
@@ -64,14 +64,14 @@ class DiscretePolicyHead(PolicyHeadABC):
         """
         return self._sample_action_jit(params, features, key)
 
-    def get_log_prob(self, params: Any, features: Array, action: Array) -> float:
+    def get_log_prob(self, params: Tuple[Array, Array], features: Array, action: Array) -> float:
         """
         Compute log probability of action under policy.
 
         Useful for policy gradient methods that need to compute log π(a|s).
 
         Args:
-            params: Head parameters
+            params: Head parameters (weight matrix and bias vector)
             features: Feature representation from backbone
             action: Action as array (consistent with sample_action output)
 
@@ -82,14 +82,14 @@ class DiscretePolicyHead(PolicyHeadABC):
 
     @staticmethod
     @jax.jit
-    def _forward_jit(params: Any, features: Array) -> Array:
+    def _forward_jit(params: Tuple[Array, Array], features: Array) -> Array:
         """JIT-compiled forward pass to compute logits."""
         w, b = params
         return jnp.dot(features, w) + b
 
     @staticmethod
     @jax.jit
-    def _sample_action_jit(params: Any, features: Array, key: Array) -> Array:
+    def _sample_action_jit(params: Tuple[Array, Array], features: Array, key: Array) -> Array:
         """JIT-compiled discrete action sampling."""
         logits = DiscretePolicyHead._forward_jit(params, features)
         action = jax.random.categorical(key, logits)
@@ -97,24 +97,24 @@ class DiscretePolicyHead(PolicyHeadABC):
 
     @staticmethod
     @jax.jit
-    def _get_log_prob_jit(params: Any, features: Array, action: Array) -> float:
+    def _get_log_prob_jit(params: Tuple[Array, Array], features: Array, action: Array) -> float:
         """JIT-compiled log probability computation."""
         logits = DiscretePolicyHead._forward_jit(params, features)
         log_probs = jax.nn.log_softmax(logits)
         action_idx = action[0].astype(int)
         return log_probs[action_idx]
     
-    def init_params(self, key: Array, action_space: gym.Space) -> Any:
+    def init_params(self, key: Array, action_space: gym.Space) -> Tuple[Array, Array]:
         """
         Initialize head parameters for discrete actions.
-        
+
         Args:
             key: JAX random key for parameter initialization
             action_space: Gymnasium space describing actions (must be Discrete)
-            
+
         Returns:
             Tuple of (weight_matrix, bias_vector)
-            
+
         Raises:
             ValueError: If action_space is not gym.spaces.Discrete
         """

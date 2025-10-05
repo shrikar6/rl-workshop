@@ -1,11 +1,14 @@
 import jax
 import jax.numpy as jnp
 import gymnasium as gym
-from typing import Any, Sequence, Callable, Optional
+from typing import Any, Sequence, Callable, Optional, List, Tuple
 from functools import partial
 from jax import Array
 from .base import BackboneABC
 from ...utils import get_input_dim
+
+# Type alias for MLP parameter structure
+MLPParams = List[Tuple[Array, Array]]  # List of (weight, bias) tuples
 
 
 class MLPBackbone(BackboneABC):
@@ -24,14 +27,14 @@ class MLPBackbone(BackboneABC):
         )
     """
     
-    def forward(self, params: Any, observation: Array) -> Array:
+    def forward(self, params: MLPParams, observation: Array) -> Array:
         """
         MLP forward pass with configurable activation.
-        
+
         Args:
             params: MLP parameters (list of (weight, bias) tuples)
             observation: Raw observation from environment
-            
+
         Returns:
             Feature representation of the observation
         """
@@ -39,22 +42,22 @@ class MLPBackbone(BackboneABC):
     
     @staticmethod
     @partial(jax.jit, static_argnums=(2,))  # Mark activation as static for JIT
-    def _forward_jit(params: Any, observation: Array, activation: Callable[[Array], Array]) -> Array:
+    def _forward_jit(params: MLPParams, observation: Array, activation: Callable[[Array], Array]) -> Array:
         """
         JIT-compiled MLP forward pass implementation.
-        
+
         Args:
             params: MLP parameters (list of (weight, bias) tuples)
             observation: Raw observation from environment
             activation: Activation function to apply
-            
+
         Returns:
             Feature representation of the observation
         """
         x = observation
         for w, b in params[:-1]:
             x = activation(jnp.dot(x, w) + b)
-        
+
         w_final, b_final = params[-1]
         return jnp.dot(x, w_final) + b_final
     
@@ -76,14 +79,14 @@ class MLPBackbone(BackboneABC):
         self.hidden_dims = tuple(hidden_dims)
         self.activation = activation if activation is not None else jax.nn.relu
     
-    def init_params(self, key: Array, observation_space: gym.Space) -> Any:
+    def init_params(self, key: Array, observation_space: gym.Space) -> MLPParams:
         """
         Initialize MLP parameters for a specific observation space.
-        
+
         Args:
             key: JAX random key for parameter initialization
             observation_space: Gymnasium space describing observations
-            
+
         Returns:
             List of (weight, bias) tuples for each layer
         """
