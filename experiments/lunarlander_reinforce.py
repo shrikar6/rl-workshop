@@ -67,7 +67,7 @@ def main():
     print()
     
     # Training loop
-    trainer.train(num_episodes)
+    agent.state, trainer.key = trainer.train(num_episodes)
     
     # Final results
     tracker.log_final(metric="return", success_threshold=200.0, window=num_episodes//10)  # LunarLander success is around 200

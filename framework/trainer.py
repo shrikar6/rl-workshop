@@ -81,35 +81,36 @@ class Trainer:
         
         return agent_state, current_key, episode_metrics
     
-    def train(self, num_episodes: int) -> None:
+    def train(self, num_episodes: int):
         """
-        Train for multiple episodes.
-        
+        Train for multiple episodes and return final states.
+
         Args:
             num_episodes: Number of episodes to train for
+
+        Returns:
+            Tuple of (final_agent_state, final_trainer_key)
         """
         # Initialize functional state
         agent_state = self.agent.state
         trainer_key = self.key
-        
+
         for episode in range(1, num_episodes + 1):
             # Check if we should record video for this episode
             record_video = False
             if self.tracker is not None and self.tracker.should_record_video(episode):
                 record_video = True
-            
+
             # Run functional episode training
             agent_state, trainer_key, episode_metrics = self.train_episode(
                 agent_state, trainer_key, record_video=record_video
             )
-            
+
             if self.tracker is not None:
                 self.tracker.log_metrics(episode, episode_metrics)
-                
+
                 # Save video if we recorded one
                 if record_video:
                     self.tracker.save_video(episode)
-        
-        # Update trainer state after all episodes complete
-        self.agent.state = agent_state
-        self.key = trainer_key
+
+        return agent_state, trainer_key
