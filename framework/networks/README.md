@@ -2,6 +2,16 @@
 
 Design decisions specific to the networks subsystem. For framework-wide patterns (config/params separation, instance methods, etc.), see `framework/README.md`.
 
+## Code Organization
+
+**Directory Structure Principle:** Three-tier hierarchy separating framework concepts, domain abstractions, and concrete implementations.
+
+- **Tier 1 (Framework ABCs):** `networks/base.py` defines fundamental building blocks: `NetworkABC`, `BackboneABC`, `HeadABC`
+- **Tier 2 (Domain ABCs):** Domain-specific abstractions like `PolicyNetworkABC`, `PolicyHeadABC` live at the domain level (e.g., `policy/base.py`)
+- **Tier 3 (Implementations):** Concrete classes in subdirectories (e.g., `backbones/mlp.py`, `policy/heads/discrete.py`)
+
+This structure clarifies what's a fundamental framework concept versus what's domain-specific, and keeps related domain abstractions together.
+
 ## Architecture: Backbone/Head Separation
 
 **What:** Networks are composed from two independent pieces:

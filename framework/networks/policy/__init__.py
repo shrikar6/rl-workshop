@@ -5,5 +5,5 @@ Components for policy-based RL algorithms that map states to action distribution
 """
 
 from . import heads
-from .base import PolicyNetworkABC
+from .base import PolicyNetworkABC, PolicyHeadABC
 from .composed import ComposedPolicyNetwork

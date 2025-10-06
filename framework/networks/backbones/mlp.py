@@ -4,7 +4,7 @@ import gymnasium as gym
 from typing import Any, Sequence, Callable, Optional, List, Tuple
 from functools import partial
 from jax import Array
-from .base import BackboneABC
+from ..base import BackboneABC
 from ...utils import get_input_dim
 
 # Type alias for MLP parameter structure

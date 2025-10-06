@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import gymnasium as gym
 from typing import Any, Tuple
 from jax import Array
-from .base import PolicyHeadABC
+from ..base import PolicyHeadABC
 
 
 class DiscretePolicyHead(PolicyHeadABC):
