@@ -10,11 +10,10 @@ from .heads import PolicyHeadABC
 class ComposedPolicyNetwork(PolicyNetworkABC):
     """
     A policy network that composes a backbone and policy head.
-    
-    This enables maximum reusability by separating feature extraction (backbone)
-    from policy output generation (head). Any backbone can be combined with any 
-    policy head for different action spaces and algorithms.
-    
+
+    The backbone extracts features from observations, and the head converts
+    those features into policy outputs (actions, log probabilities).
+
     Examples:
         # For discrete policy (REINFORCE, PPO, etc.)
         policy = ComposedPolicyNetwork(

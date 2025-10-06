@@ -21,10 +21,10 @@ from .base import AgentABC
 class REINFORCEState(NamedTuple):
     """
     Immutable state for REINFORCE agent.
-    
-    All state is immutable - methods return new state objects rather than
-    mutating existing state. This enables functional programming patterns.
-    
+
+    Tracks policy parameters, optimizer state, episode buffers, and baseline value.
+    State is updated functionally - methods return new state objects.
+
     TODO: Performance limitations - This implementation has O(n²) time complexity
     for episode collection due to list concatenation in select_action() and update().
     Additionally, lists grow unboundedly which can cause memory issues for very long

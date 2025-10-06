@@ -7,11 +7,10 @@ from jax import Array
 class BackboneABC(ABC):
     """
     Abstract base class for policy backbones.
-    
-    A backbone extracts features from raw observations. This allows the same
-    feature extraction logic to be reused with different output heads for
-    different action spaces (discrete, continuous, etc.).
-    
+
+    A backbone extracts features from raw observations that can be used by
+    different types of output heads.
+
     Architecture decisions (hidden layer sizes, activation functions) are made
     at construction time. Environment binding (observation space) happens at parameter
     initialization time.
