@@ -1,5 +1,6 @@
 import jax
 from typing import Optional, Dict, Any
+from jax import Array
 from .environments import EnvironmentABC
 from .agents import AgentABC
 from .tracking import Tracker
@@ -8,31 +9,28 @@ from .tracking import Tracker
 class Trainer:
     """
     Basic training loop for reinforcement learning.
-    
+
     Handles the core episode loop: reset environment, run episode,
-    update agent from experience. Manages JAX random keys for reproducible training.
-    Optionally tracks training progress with a Tracker.
+    update agent from experience. Random keys are passed functionally
+    to ensure reproducible training. Optionally tracks training progress.
     """
     
     def __init__(
-        self, 
-        environment: EnvironmentABC, 
-        agent: AgentABC, 
-        seed: int = 42,
+        self,
+        environment: EnvironmentABC,
+        agent: AgentABC,
         tracker: Optional[Tracker] = None
     ):
         """
         Initialize trainer with environment and agent.
-        
+
         Args:
             environment: Environment to train in
             agent: Agent to train
-            seed: Random seed for reproducible training
             tracker: Optional tracker for logging training progress
         """
         self.env = environment
         self.agent = agent
-        self.key = jax.random.PRNGKey(seed)
         self.tracker = tracker
     
     def train_episode(self, state: Any, trainer_key, record_video: bool = False):
@@ -81,18 +79,19 @@ class Trainer:
 
         return state, current_key, episode_metrics
     
-    def train(self, state: Any, num_episodes: int):
+    def train(self, state: Any, key: Array, num_episodes: int):
         """
         Train for multiple episodes and return final states.
 
         Args:
             state: Agent state to start training from
+            key: JAX random key for reproducible training
             num_episodes: Number of episodes to train for
 
         Returns:
             Tuple of (final_state, final_trainer_key)
         """
-        trainer_key = self.key
+        trainer_key = key
 
         for episode in range(1, num_episodes + 1):
             # Check if we should record video for this episode

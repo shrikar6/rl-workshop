@@ -59,7 +59,7 @@ def main():
     )
 
     # Create trainer with integrated tracker
-    trainer = Trainer(environment=env, agent=agent, seed=seed, tracker=tracker)
+    trainer = Trainer(environment=env, agent=agent, tracker=tracker)
 
     # Log experiment configuration
     print("Starting CartPole REINFORCE experiment")
@@ -71,7 +71,8 @@ def main():
     print()
 
     # Training loop
-    final_state, final_key = trainer.train(agent_state, num_episodes)
+    trainer_key = jax.random.PRNGKey(seed)
+    final_state, final_key = trainer.train(agent_state, trainer_key, num_episodes)
     
     # Final results
     tracker.log_final(metric="return", success_threshold=450.0, window=num_episodes//10)

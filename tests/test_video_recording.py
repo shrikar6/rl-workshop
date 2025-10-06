@@ -104,10 +104,11 @@ def test_integration_with_trainer():
         )
 
         # Create trainer
-        trainer = Trainer(environment=env, agent=agent, seed=42, tracker=tracker)
+        trainer = Trainer(environment=env, agent=agent, tracker=tracker)
 
         # Train for a few episodes
-        trainer.train(agent_state, num_episodes=10)
+        trainer_key = jax.random.PRNGKey(42)
+        trainer.train(agent_state, trainer_key, num_episodes=10)
         
         # Check that video files were created at right episodes
         videos_dir = Path(tmpdir) / "test_trainer" / "videos"
