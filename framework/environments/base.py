@@ -49,3 +49,23 @@ class EnvironmentABC(ABC):
     def action_space(self) -> gym.Space:
         """Get the action space."""
         pass
+
+    @abstractmethod
+    def render(self):
+        """
+        Render the environment.
+
+        Returns:
+            Rendering output (format depends on render_mode - typically RGB array or None)
+        """
+        pass
+
+    @abstractmethod
+    def close(self):
+        """
+        Close the environment and clean up resources.
+
+        Should be called when done using the environment to properly release
+        any resources (display windows, file handles, etc.).
+        """
+        pass
