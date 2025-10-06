@@ -24,12 +24,6 @@ class REINFORCEState(NamedTuple):
 
     Tracks policy parameters, optimizer state, episode buffers, and baseline value.
     State is updated functionally - methods return new state objects.
-
-    TODO: Performance limitations - This implementation has O(n²) time complexity
-    for episode collection due to list concatenation in select_action() and update().
-    Additionally, lists grow unboundedly which can cause memory issues for very long
-    episodes. These are known limitations that won't be fixed as REINFORCE is intended
-    as a simple baseline/test-bench agent for small toy environments.
     """
     policy_params: Any
     opt_state: Any
