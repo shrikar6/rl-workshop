@@ -91,6 +91,58 @@ policy_tanh = ComposedPolicyNetwork(
 
 **Why:** Composition maximizes plug-and-play flexibility. Any backbone can work with any head. Shallow hierarchies are easier to understand than deep inheritance trees.
 
+### 5. JIT Compilation Strategy: Optimize the Math, Keep the Composition Simple
+
+**What:** JIT compilation is applied to computational primitives (the math), but not to orchestration/composition logic (calling and combining components). We accept marginal performance loss in exchange for simplicity and clarity.
+
+**Computational Primitives (JIT'd):**
+- Neural network forward passes (matrix multiplies, activations, etc.)
+- Sampling operations (categorical sampling, etc.)
+- Specific computational kernels (advantage computation, etc.)
+
+**Orchestration/Composition (NOT JIT'd):**
+- Calling one component then another
+- Combining results from multiple components
+- State management and bookkeeping (Python list operations, NamedTuple updates, etc.)
+
+**Example:**
+```python
+# Computational primitive - JIT'd
+class MLPBackbone:
+    def forward(self, params, observation):
+        return self._forward_jit(params, observation, self.activation)
+
+    @staticmethod
+    @partial(jax.jit, static_argnums=(2,))
+    def _forward_jit(params, observation, activation):
+        # The math: matrix multiplies, activations
+        x = observation
+        for w, b in params[:-1]:
+            x = activation(jnp.dot(x, w) + b)
+        w_final, b_final = params[-1]
+        return jnp.dot(x, w_final) + b_final
+
+# Orchestration - NOT JIT'd
+class ComposedPolicyNetwork:
+    def forward(self, params, observation):
+        backbone_params, head_params = params
+        # Orchestration: call backbone, then call head
+        features = self.backbone.forward(backbone_params, observation)
+        return self.head.forward(head_params, features)
+
+class REINFORCEAgent:
+    def select_action(self, state, observation, key):
+        # Orchestration: call policy (already JIT'd) + state updates (Python ops)
+        action = self.policy.sample_action(state.policy_params, observation, key)
+        new_state = state._replace(
+            episode_observations=state.episode_observations + [observation],
+            episode_actions=state.episode_actions + [action]
+        )
+        return action, new_state
+```
+
+**Why:** This strategy captures ~95% of the performance gains (by JIT'ing the computational primitives) while keeping the codebase simple and maintainable. Alternative approaches like adding JIT to orchestration layers could squeeze out an additional 1-5% performance, but at the cost of moderate complexity increase, less elegant code, and marginal real-world benefit.
+
 ## Implementation Conventions
 
 ### Parameter Initialization: Xavier/Glorot
