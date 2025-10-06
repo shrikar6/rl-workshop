@@ -153,9 +153,15 @@ Maintains variance across layers for better gradient flow. More general than He 
 
 ### Parameter Structure: Tuples
 
-Parameters are stored as tuples: `(w, b)` for a single layer, or lists of tuples for multi-layer networks.
+**What:** Parameters use tuples. Single layers use `(w, b)`, multi-layer networks use lists of tuples `[(w, b), (w, b), ...]`, and composed networks use tuples of component params `(backbone_params, head_params)`.
 
-Simple, minimal overhead, works naturally with JAX pytrees.
+**Why:** Tuples provide the right balance for our workshop:
+
+- **Elegance (Priority 4):** Minimal syntax with clean unpacking (`w, b = params`)
+- **Freedom from conventions (Priority 1):** No coupling to standardized naming - each component freely chooses its structure
+- **Functional style (Priority 2):** Aligns with functional programming patterns and JAX treats them as pytrees naturally
+
+**Alternative considered:** Dict-based structures `{"weight": w, "bias": b}` offer self-documenting keys and backward-compatible evolution (can add optional fields via `.get()`). Production libraries like Flax/Haiku use dicts because they need backward compatibility with saved model checkpoints across versions. Our workshop retrains from scratch each experiment and allows breaking changes, so tuple simplicity wins over dict evolvability.
 
 ### Random Key Management
 
