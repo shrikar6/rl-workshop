@@ -1,5 +1,5 @@
 import jax
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from .environments import EnvironmentABC
 from .agents import AgentABC
 from .tracking import Tracker
@@ -35,64 +35,63 @@ class Trainer:
         self.key = jax.random.PRNGKey(seed)
         self.tracker = tracker
     
-    def train_episode(self, agent_state, trainer_key, record_video: bool = False):
+    def train_episode(self, state: Any, trainer_key, record_video: bool = False):
         """
         Run one complete episode and return new states and metrics.
-        
+
         Args:
-            agent_state: Current agent state
+            state: Current agent state
             trainer_key: Current JAX random key for trainer
             record_video: Whether to record video for this episode
-            
+
         Returns:
-            Tuple of (new_agent_state, new_trainer_key, episode_metrics)
+            Tuple of (new_state, new_trainer_key, episode_metrics)
         """
         obs = self.env.reset()
         total_reward = 0.0
         done = False
         episode_metrics = {}
         current_key = trainer_key
-        
+
         while not done:
             # Record frame if video recording is enabled
             if record_video and self.tracker is not None:
                 frame = self.env.render()
                 if frame is not None:
                     self.tracker.add_video_frame(frame)
-            
+
             # Split key into 3: next iteration, action selection, update
             keys = jax.random.split(current_key, 3)
             current_key = keys[0]
-            
-            action, agent_state = self.agent.select_action(agent_state, obs, keys[1])
+
+            action, state = self.agent.select_action(state, obs, keys[1])
             next_obs, reward, done = self.env.step(action)
-            
-            agent_state, step_metrics = self.agent.update(agent_state, obs, action, reward, next_obs, done, keys[2])
-            
+
+            state, step_metrics = self.agent.update(state, obs, action, reward, next_obs, done, keys[2])
+
             # Collect metrics from agent updates (only when episode ends)
             if step_metrics:
                 episode_metrics.update(step_metrics)
-            
+
             obs = next_obs
             total_reward += reward
-        
+
         # Always include episode return in metrics
         episode_metrics["return"] = total_reward
-        
-        return agent_state, current_key, episode_metrics
+
+        return state, current_key, episode_metrics
     
-    def train(self, num_episodes: int):
+    def train(self, state: Any, num_episodes: int):
         """
         Train for multiple episodes and return final states.
 
         Args:
+            state: Agent state to start training from
             num_episodes: Number of episodes to train for
 
         Returns:
-            Tuple of (final_agent_state, final_trainer_key)
+            Tuple of (final_state, final_trainer_key)
         """
-        # Initialize functional state
-        agent_state = self.agent.state
         trainer_key = self.key
 
         for episode in range(1, num_episodes + 1):
@@ -102,8 +101,8 @@ class Trainer:
                 record_video = True
 
             # Run functional episode training
-            agent_state, trainer_key, episode_metrics = self.train_episode(
-                agent_state, trainer_key, record_video=record_video
+            state, trainer_key, episode_metrics = self.train_episode(
+                state, trainer_key, record_video=record_video
             )
 
             if self.tracker is not None:
@@ -113,4 +112,4 @@ class Trainer:
                 if record_video:
                     self.tracker.save_video(episode)
 
-        return agent_state, trainer_key
+        return state, trainer_key

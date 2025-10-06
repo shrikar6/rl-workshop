@@ -3,6 +3,7 @@ Tests for Trainer class.
 """
 
 import tempfile
+import jax
 import jax.numpy as jnp
 from unittest.mock import Mock
 from framework import Trainer, Tracker
@@ -42,18 +43,20 @@ class MockEnvironment(EnvironmentABC):
 
 class MockAgent(AgentABC):
     """Mock agent for testing."""
-    
+
     def __init__(self, fixed_action: int = 0):
         self.fixed_action = fixed_action
         self.select_action_calls = []
         self.update_calls = []
-        # Mock state for functional interface
-        self.state = {"mock_params": "test"}
-        
+
+    def init_state(self, key):
+        """Create initial mock state."""
+        return {"mock_params": "test"}
+
     def select_action(self, state, observation, key):
         self.select_action_calls.append((state, observation, key))
         return jnp.array([self.fixed_action]), state
-    
+
     def update(self, state, obs, action, reward, next_obs, done, key):
         self.update_calls.append((state, obs, action, reward, next_obs, done, key))
         return state, {}
@@ -87,9 +90,12 @@ class TestTrainer:
         env = MockEnvironment(episode_length=3, reward_per_step=1.0)
         agent = MockAgent(fixed_action=1)
         trainer = Trainer(env, agent, seed=42)
-        
-        agent_state, trainer_key, episode_metrics = trainer.train_episode(
-            trainer.agent.state, trainer.key
+
+        key = jax.random.PRNGKey(0)
+        state = agent.init_state(key)
+
+        state, trainer_key, episode_metrics = trainer.train_episode(
+            state, trainer.key
         )
         
         # Check episode reward
@@ -108,9 +114,12 @@ class TestTrainer:
         env = MockEnvironment(episode_length=2, reward_per_step=2.0)
         agent = MockAgent()
         trainer = Trainer(env, agent, seed=42)
-        
-        trainer.train(num_episodes=3)
-        
+
+        key = jax.random.PRNGKey(0)
+        state = agent.init_state(key)
+
+        trainer.train(state, num_episodes=3)
+
         # Should have 3 episodes * 2 steps each = 6 total interactions
         assert len(agent.select_action_calls) == 6
         assert len(agent.update_calls) == 6
@@ -122,8 +131,11 @@ class TestTrainer:
             agent = MockAgent()
             tracker = Tracker(log_interval=1, results_dir=tmpdir)  # Log every episode
             trainer = Trainer(env, agent, seed=42, tracker=tracker)
-            
-            trainer.train(num_episodes=2)
+
+            key = jax.random.PRNGKey(0)
+            state = agent.init_state(key)
+
+            trainer.train(state, num_episodes=2)
             
             # Check tracker received episode data
             returns = tracker.get_metric("return")
@@ -141,8 +153,11 @@ class TestTrainer:
         env = MockEnvironment(episode_length=1)
         agent = MockAgent()
         trainer = Trainer(env, agent, seed=42)
-        
-        trainer.train(num_episodes=2)
+
+        key = jax.random.PRNGKey(0)
+        state = agent.init_state(key)
+
+        trainer.train(state, num_episodes=2)
         
         # Should produce no output
         captured = capsys.readouterr()
@@ -154,14 +169,16 @@ class TestTrainer:
             env = MockEnvironment(episode_length=2)
             agent = MockAgent()
             trainer = Trainer(env, agent, seed=999)
-            agent_state, trainer_key, episode_metrics = trainer.train_episode(
-                trainer.agent.state, trainer.key
+            key = jax.random.PRNGKey(0)
+            state = agent.init_state(key)
+            state, trainer_key, episode_metrics = trainer.train_episode(
+                state, trainer.key
             )
             return episode_metrics
-        
+
         metrics1 = create_trainer_and_run()
         metrics2 = create_trainer_and_run()
-        
+
         assert metrics1["return"] == metrics2["return"]
         
     def test_different_seeds_different_keys(self):
@@ -169,12 +186,17 @@ class TestTrainer:
         env = MockEnvironment()
         agent1 = MockAgent()
         agent2 = MockAgent()
-        
+
         trainer1 = Trainer(env, agent1, seed=1)
         trainer2 = Trainer(env, agent2, seed=2)
-        
-        trainer1.train_episode(trainer1.agent.state, trainer1.key)
-        trainer2.train_episode(trainer2.agent.state, trainer2.key)
+
+        key1 = jax.random.PRNGKey(0)
+        state1 = agent1.init_state(key1)
+        key2 = jax.random.PRNGKey(0)
+        state2 = agent2.init_state(key2)
+
+        trainer1.train_episode(state1, trainer1.key)
+        trainer2.train_episode(state2, trainer2.key)
         
         keys1 = [call[2] for call in agent1.select_action_calls]
         keys2 = [call[2] for call in agent2.select_action_calls]
@@ -186,10 +208,13 @@ class TestTrainer:
         env = MockEnvironment(episode_length=2)
         agent = MockAgent()
         trainer = Trainer(env, agent, seed=42)
-        
+
+        key = jax.random.PRNGKey(0)
+        state = agent.init_state(key)
+
         initial_key = trainer.key
-        agent_state, new_trainer_key, episode_metrics = trainer.train_episode(
-            trainer.agent.state, trainer.key
+        state, new_trainer_key, episode_metrics = trainer.train_episode(
+            state, trainer.key
         )
         
         assert not jnp.array_equal(new_trainer_key, initial_key)

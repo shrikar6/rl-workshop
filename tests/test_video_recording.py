@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 import numpy as np
+import jax
 
 from framework import Tracker, Trainer, CartPoleEnv, REINFORCEAgent, ComposedPolicyNetwork, MLPBackbone, DiscretePolicyHead
 
@@ -86,10 +87,13 @@ def test_integration_with_trainer():
             observation_space=env.observation_space,
             action_space=env.action_space,
             learning_rate=1e-3,
-            gamma=0.99,
-            seed=42
+            gamma=0.99
         )
-        
+
+        # Initialize agent state
+        key = jax.random.PRNGKey(42)
+        agent_state = agent.init_state(key)
+
         # Create tracker with video recording
         tracker = Tracker(
             log_interval=5,
@@ -98,12 +102,12 @@ def test_integration_with_trainer():
             video_interval=5,  # Record every 5 episodes for testing
             experiment_name="test_trainer"
         )
-        
+
         # Create trainer
         trainer = Trainer(environment=env, agent=agent, seed=42, tracker=tracker)
-        
+
         # Train for a few episodes
-        trainer.train(num_episodes=10)
+        trainer.train(agent_state, num_episodes=10)
         
         # Check that video files were created at right episodes
         videos_dir = Path(tmpdir) / "test_trainer" / "videos"

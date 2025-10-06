@@ -5,6 +5,7 @@ Trains a REINFORCE agent on the CartPole-v1 environment
 using an MLP policy with a discrete action head.
 """
 
+import jax
 from framework import (
     REINFORCEAgent,
     ComposedPolicyNetwork,
@@ -42,21 +43,24 @@ def main():
         action_space=env.action_space,
         learning_rate=learning_rate,
         gamma=gamma,
-        baseline_alpha=baseline_alpha,
-        seed=seed
+        baseline_alpha=baseline_alpha
     )
-    
+
+    # Initialize agent state
+    agent_key = jax.random.PRNGKey(seed)
+    agent_state = agent.init_state(agent_key)
+
     # Initialize tracker with video recording
     tracker = Tracker(
-        log_interval=10, 
+        log_interval=10,
         window=10,
         video_interval=num_episodes // 10,  # Record video every 10% of training
         experiment_name="cartpole_reinforce"
     )
-    
+
     # Create trainer with integrated tracker
     trainer = Trainer(environment=env, agent=agent, seed=seed, tracker=tracker)
-    
+
     # Log experiment configuration
     print("Starting CartPole REINFORCE experiment")
     print(f"Episodes: {num_episodes}")
@@ -65,9 +69,9 @@ def main():
     print(f"Baseline alpha: {baseline_alpha}")
     print(f"Policy architecture: MLP({hidden_dims}) -> {backbone_output_dim} -> DiscretePolicyHead(2)")
     print()
-    
+
     # Training loop
-    agent.state, trainer.key = trainer.train(num_episodes)
+    final_state, final_key = trainer.train(agent_state, num_episodes)
     
     # Final results
     tracker.log_final(metric="return", success_threshold=450.0, window=num_episodes//10)

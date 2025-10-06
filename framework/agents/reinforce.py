@@ -49,26 +49,24 @@ class REINFORCEAgent(AgentABC):
     """
     
     def __init__(
-        self, 
-        policy: PolicyNetworkABC, 
+        self,
+        policy: PolicyNetworkABC,
         observation_space: gym.Space,
         action_space: gym.Space,
         learning_rate: float = 1e-3,
         gamma: float = 0.99,
-        baseline_alpha: float = 0.01,
-        seed: int = 0
+        baseline_alpha: float = 0.01
     ):
         """
-        Initialize REINFORCE agent and create initial state.
-        
+        Initialize REINFORCE agent.
+
         Args:
             policy: Policy network to optimize
             observation_space: Environment observation space
-            action_space: Environment action space  
+            action_space: Environment action space
             learning_rate: Step size for gradient updates
             gamma: Discount factor for future rewards
             baseline_alpha: Exponential moving average coefficient for baseline update
-            seed: Random seed for parameter initialization
         """
         self.policy = policy
         self.learning_rate = learning_rate
@@ -76,17 +74,24 @@ class REINFORCEAgent(AgentABC):
         self.baseline_alpha = baseline_alpha
         self.observation_space = observation_space
         self.action_space = action_space
-        
+
         # Initialize optimizer
         self.optimizer = optax.adam(learning_rate)
-        
-        # Create initial state
-        key = jax.random.PRNGKey(seed)
-        key, init_key = jax.random.split(key)
-        policy_params = policy.init_params(init_key, observation_space, action_space)
+
+    def init_state(self, key: Array) -> REINFORCEState:
+        """
+        Create initial agent state.
+
+        Args:
+            key: JAX random key for parameter initialization
+
+        Returns:
+            Initial REINFORCEState with randomly initialized parameters
+        """
+        policy_params = self.policy.init_params(key, self.observation_space, self.action_space)
         opt_state = self.optimizer.init(policy_params)
-        
-        self.state = REINFORCEState(
+
+        return REINFORCEState(
             policy_params=policy_params,
             opt_state=opt_state,
             episode_observations=[],
