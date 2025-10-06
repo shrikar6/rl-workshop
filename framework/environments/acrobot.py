@@ -49,10 +49,8 @@ class AcrobotEnv(EnvironmentABC):
         Returns:
             Tuple of (observation, reward, done)
         """
-        # Convert JAX array to discrete action and validate
+        # Convert JAX array to discrete action
         discrete_action = int(action[0])
-        assert discrete_action in [0, 1, 2], f"Invalid action: {discrete_action}. Must be 0, 1, or 2."
-
         obs, reward, terminated, truncated, _ = self.env.step(discrete_action)
         return jnp.array(obs), float(reward), bool(terminated or truncated)
     

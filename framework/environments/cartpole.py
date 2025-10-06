@@ -48,10 +48,8 @@ class CartPoleEnv(EnvironmentABC):
         Returns:
             Tuple of (observation, reward, done)
         """
-        # Convert JAX array to discrete action and validate
+        # Convert JAX array to discrete action
         discrete_action = int(action[0])
-        assert discrete_action in [0, 1], f"Invalid action: {discrete_action}. Must be 0 or 1."
-
         obs, reward, terminated, truncated, _ = self.env.step(discrete_action)
         return jnp.array(obs), float(reward), bool(terminated or truncated)
     

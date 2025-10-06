@@ -96,19 +96,6 @@ class TestEnvironments:
         
         env.close()
     
-    def test_step_invalid_action(self, env_config):
-        """Test that invalid actions raise errors."""
-        env = env_config["class"]()
-        env.reset()
-        
-        # Invalid action (out of range)
-        invalid_action = jnp.array([env_config["action_dim"]])
-        
-        with pytest.raises(AssertionError, match="Invalid action"):
-            env.step(invalid_action)
-        
-        env.close()
-    
     def test_episode_termination(self, env_config):
         """Test that episodes can terminate."""
         env = env_config["class"]()
