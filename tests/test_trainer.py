@@ -40,6 +40,11 @@ class MockEnvironment(EnvironmentABC):
         import gymnasium as gym
         return gym.spaces.Discrete(2)
 
+    @property
+    def max_episode_length(self):
+        """Mock max episode length."""
+        return self.episode_length
+
     def render(self):
         """Mock render method."""
         return None

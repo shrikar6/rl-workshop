@@ -63,7 +63,12 @@ class LunarLanderEnv(EnvironmentABC):
     def action_space(self) -> gym.Space:
         """Action space: discrete actions {0, 1, 2, 3}"""
         return self.env.action_space
-    
+
+    @property
+    def max_episode_length(self) -> int:
+        """Maximum episode length: 1000 steps"""
+        return self.env.spec.max_episode_steps
+
     def render(self):
         """Render the environment."""
         return self.env.render()

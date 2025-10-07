@@ -50,6 +50,12 @@ class EnvironmentABC(ABC):
         """Get the action space."""
         pass
 
+    @property
+    @abstractmethod
+    def max_episode_length(self) -> int:
+        """Get maximum episode length."""
+        pass
+
     @abstractmethod
     def render(self):
         """
