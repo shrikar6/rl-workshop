@@ -41,6 +41,7 @@ def main():
         policy=policy,
         observation_space=env.observation_space,
         action_space=env.action_space,
+        max_episode_length=env.max_episode_length,
         learning_rate=learning_rate,
         gamma=gamma,
         baseline_alpha=baseline_alpha

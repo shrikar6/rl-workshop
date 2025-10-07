@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 import optax
 import gymnasium as gym
-from typing import List, NamedTuple, Any, Tuple, Dict
+from typing import NamedTuple, Any, Tuple, Dict
 from jax import Array
 from ..networks.policy import PolicyNetworkABC
 from .base import AgentABC
@@ -24,12 +24,14 @@ class REINFORCEState(NamedTuple):
 
     Tracks policy parameters, optimizer state, episode buffers, and baseline value.
     State is updated functionally - methods return new state objects.
+    Episode buffers are pre-allocated JAX arrays for O(n) complexity.
     """
     policy_params: Any
     opt_state: Any
-    episode_observations: List[Array]
-    episode_actions: List[Array]
-    episode_rewards: List[float]
+    episode_observations: Array  # Pre-allocated buffer [max_episode_length, obs_shape]
+    episode_actions: Array  # Pre-allocated buffer [max_episode_length, action_shape]
+    episode_rewards: Array  # Pre-allocated buffer [max_episode_length]
+    episode_length: int  # Current number of transitions stored in buffers
     baseline: float  # Moving average of episode returns for variance reduction
 
 
@@ -47,6 +49,7 @@ class REINFORCEAgent(AgentABC):
         policy: PolicyNetworkABC,
         observation_space: gym.Space,
         action_space: gym.Space,
+        max_episode_length: int,
         learning_rate: float = 1e-3,
         gamma: float = 0.99,
         baseline_alpha: float = 0.01
@@ -58,6 +61,7 @@ class REINFORCEAgent(AgentABC):
             policy: Policy network to optimize
             observation_space: Environment observation space
             action_space: Environment action space
+            max_episode_length: Maximum episode length for pre-allocating buffers
             learning_rate: Step size for gradient updates
             gamma: Discount factor for future rewards
             baseline_alpha: Exponential moving average coefficient for baseline update
@@ -68,6 +72,7 @@ class REINFORCEAgent(AgentABC):
         self.baseline_alpha = baseline_alpha
         self.observation_space = observation_space
         self.action_space = action_space
+        self.max_episode_length = max_episode_length
 
         # Initialize optimizer
         self.optimizer = optax.adam(learning_rate)
@@ -85,57 +90,67 @@ class REINFORCEAgent(AgentABC):
         policy_params = self.policy.init_params(key, self.observation_space, self.action_space)
         opt_state = self.optimizer.init(policy_params)
 
+        # Pre-allocate episode buffers
+        obs_shape = self.observation_space.shape
+        action_shape = (1,)  # Actions are single scalars wrapped in arrays
+
+        episode_observations = jnp.zeros((self.max_episode_length, *obs_shape))
+        episode_actions = jnp.zeros((self.max_episode_length, *action_shape))
+        episode_rewards = jnp.zeros(self.max_episode_length)
+
         return REINFORCEState(
             policy_params=policy_params,
             opt_state=opt_state,
-            episode_observations=[],
-            episode_actions=[],
-            episode_rewards=[],
+            episode_observations=episode_observations,
+            episode_actions=episode_actions,
+            episode_rewards=episode_rewards,
+            episode_length=0,
             baseline=0.0
         )
     
     def select_action(self, state: REINFORCEState, observation: Array, key: Array) -> Tuple[Array, REINFORCEState]:
         """
         Select action using current policy and return new state.
-        
+
         During training, we store the observation and action for later
         policy gradient computation.
-        
+
         Args:
             state: Current agent state
             observation: Current state
             key: Random key for stochastic action selection
-            
+
         Returns:
             Tuple of (action, new_agent_state)
         """
         # Select action using current policy parameters
         action = self.policy.sample_action(state.policy_params, observation, key)
-        
-        # Create new state with stored observation and action
+
+        # Store observation and action in pre-allocated buffers
         new_state = state._replace(
-            episode_observations=state.episode_observations + [observation],
-            episode_actions=state.episode_actions + [action]
+            episode_observations=state.episode_observations.at[state.episode_length].set(observation),
+            episode_actions=state.episode_actions.at[state.episode_length].set(action),
+            episode_length=state.episode_length + 1
         )
-        
+
         return action, new_state
     
     def update(
-        self, 
+        self,
         state: REINFORCEState,
-        obs: Array, 
-        action: Array, 
-        reward: float, 
-        next_obs: Array, 
-        done: bool, 
+        obs: Array,
+        action: Array,
+        reward: float,
+        next_obs: Array,
+        done: bool,
         key: Array
     ) -> Tuple[REINFORCEState, Dict[str, float]]:
         """
         Store rewards and update policy at episode end, returning new state and metrics.
-        
+
         REINFORCE waits until the episode is complete before updating,
         because it needs the full trajectory to compute returns.
-        
+
         Args:
             state: Current agent state
             obs: Current observation (unused - we stored it in select_action)
@@ -144,25 +159,33 @@ class REINFORCEAgent(AgentABC):
             next_obs: Next observation (unused in REINFORCE)
             done: Whether episode ended
             key: Random key (unused in this update)
-            
+
         Returns:
             Tuple of (new agent state, metrics dict)
         """
-        # Add reward to episode buffer
+        # Store reward in pre-allocated buffer at the current index
+        # episode_length was already incremented in select_action, so we use episode_length-1
+        reward_idx = state.episode_length - 1
         new_state = state._replace(
-            episode_rewards=state.episode_rewards + [reward]
+            episode_rewards=state.episode_rewards.at[reward_idx].set(reward)
         )
-        
+
         # Only update when episode is complete
         if done:
-            # Update policy and baseline, then clear buffers for next episode
+            # Update policy and baseline, then reset buffers for next episode
             updated_params, updated_opt_state, updated_baseline, metrics = self._update_policy(new_state)
+
+            # Reset episode buffers by creating fresh zero arrays
+            obs_shape = self.observation_space.shape
+            action_shape = (1,)
+
             return REINFORCEState(
                 policy_params=updated_params,
                 opt_state=updated_opt_state,
-                episode_observations=[],
-                episode_actions=[],
-                episode_rewards=[],
+                episode_observations=jnp.zeros((self.max_episode_length, *obs_shape)),
+                episode_actions=jnp.zeros((self.max_episode_length, *action_shape)),
+                episode_rewards=jnp.zeros(self.max_episode_length),
+                episode_length=0,
                 baseline=updated_baseline
             ), metrics
         else:
@@ -211,27 +234,27 @@ class REINFORCEAgent(AgentABC):
     def _update_policy(self, state: REINFORCEState) -> Tuple[Any, Any, float, Dict[str, float]]:
         """
         Update policy parameters using REINFORCE gradient estimator with baseline.
-        
+
         The REINFORCE gradient with baseline is:
         ∇J(θ) = E[∑_t ∇log π(a_t|s_t; θ) * (G_t - b)]
-        
+
         Where G_t is the return from timestep t and b is the baseline.
-        
+
         Args:
             state: Current agent state
-            
+
         Returns:
             Tuple of (updated_policy_params, updated_opt_state, updated_baseline, metrics)
         """
+        # Extract only the filled portion of episode buffers using slicing
+        rewards = state.episode_rewards[:state.episode_length]
+        observations = state.episode_observations[:state.episode_length]
+        actions = state.episode_actions[:state.episode_length]
+
         # Compute returns, updated baseline, and advantages in single JIT call
-        rewards = jnp.array(state.episode_rewards)
         updated_baseline, advantages = self._compute_baseline_and_advantages_jit(
             rewards, self.gamma, state.baseline, self.baseline_alpha
         )
-        
-        # Convert episode data to JAX arrays
-        observations = jnp.stack(state.episode_observations)
-        actions = jnp.stack(state.episode_actions)
 
         # Define loss function for policy gradient
         def policy_loss(params):

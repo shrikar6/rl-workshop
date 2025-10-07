@@ -31,6 +31,7 @@ class TestREINFORCEAgent:
             policy=policy,
             observation_space=env.observation_space,
             action_space=env.action_space,
+            max_episode_length=env.max_episode_length,
             learning_rate=1e-3,
             gamma=0.99
         )
@@ -49,9 +50,11 @@ class TestREINFORCEAgent:
         assert agent.gamma == 0.99
         assert agent.learning_rate == 1e-3
 
-        assert len(state.episode_observations) == 0
-        assert len(state.episode_actions) == 0
-        assert len(state.episode_rewards) == 0
+        # Check episode buffers are pre-allocated with correct shapes
+        assert state.episode_length == 0
+        assert state.episode_observations.shape == (agent.max_episode_length, 4)  # CartPole obs dim
+        assert state.episode_actions.shape == (agent.max_episode_length, 1)
+        assert state.episode_rewards.shape == (agent.max_episode_length,)
         assert state.baseline == 0.0
         assert agent.baseline_alpha == 0.01
     
@@ -67,6 +70,7 @@ class TestREINFORCEAgent:
             policy=policy,
             observation_space=env.observation_space,
             action_space=env.action_space,
+            max_episode_length=env.max_episode_length,
             gamma=0.9,
             baseline_alpha=0.1
         )
@@ -108,21 +112,19 @@ class TestREINFORCEAgent:
 
         key, action_key = jax.random.split(key)
         action, new_state = agent.select_action(state, obs, action_key)
-        
-        assert len(new_state.episode_observations) == 1
-        assert len(new_state.episode_actions) == 1
-        assert len(new_state.episode_rewards) == 0
-        
+
+        # After select_action, episode_length should be 1 (obs and action stored)
+        assert new_state.episode_length == 1
+
         new_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
-        
-        assert len(new_state.episode_rewards) == 1
-        assert len(new_state.episode_observations) == 1
-        
+
+        # After update (not done), episode_length should still be 1 (reward stored)
+        assert new_state.episode_length == 1
+
         final_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
-        
-        assert len(final_state.episode_observations) == 0
-        assert len(final_state.episode_actions) == 0
-        assert len(final_state.episode_rewards) == 0
+
+        # After done, buffers should be reset (episode_length back to 0)
+        assert final_state.episode_length == 0
     
     def test_update_only_at_episode_end(self, agent, state):
         """Test that policy update only happens when episode ends."""
@@ -135,28 +137,36 @@ class TestREINFORCEAgent:
         key, action_key = jax.random.split(key)
         action, new_state = agent.select_action(state, obs, action_key)
         new_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
-        
+
         params_unchanged = jax.tree.map(
             lambda x, y: jnp.allclose(x, y),
             initial_params, new_state.policy_params
         )
         assert jax.tree_util.tree_all(params_unchanged)
-        
+
         final_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
-        
-        assert len(final_state.episode_observations) == 0
+
+        # After episode ends, buffers should be reset
+        assert final_state.episode_length == 0
     
     def test_constant_returns_normalization(self, agent, state):
         """Test normalization when all returns are the same (std = 0)."""
+        # Create test state with episode buffers filled with constant rewards
+        episode_length = 3
         test_state = state._replace(
-            episode_rewards=[1.0, 1.0, 1.0],
-            episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4]) for _ in range(3)],
-            episode_actions=[jnp.array([0]) for _ in range(3)],
+            episode_rewards=state.episode_rewards.at[:episode_length].set(jnp.array([1.0, 1.0, 1.0])),
+            episode_observations=state.episode_observations.at[:episode_length].set(
+                jnp.array([[0.1, 0.2, 0.3, 0.4] for _ in range(episode_length)])
+            ),
+            episode_actions=state.episode_actions.at[:episode_length].set(
+                jnp.array([[0] for _ in range(episode_length)])
+            ),
+            episode_length=episode_length,
             baseline=0.0
         )
-        
+
         updated_params, updated_opt_state, updated_baseline, _ = agent._update_policy(test_state)
-        
+
         assert updated_params is not None
         assert updated_opt_state is not None
     
@@ -168,42 +178,54 @@ class TestREINFORCEAgent:
     def test_baseline_update(self, agent, state):
         """Test baseline exponential moving average update."""
         # Create test state with known rewards
+        episode_length = 3
         test_state = state._replace(
-            episode_rewards=[1.0, 2.0, 3.0],
-            episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4]) for _ in range(3)],
-            episode_actions=[jnp.array([0]) for _ in range(3)],
+            episode_rewards=state.episode_rewards.at[:episode_length].set(jnp.array([1.0, 2.0, 3.0])),
+            episode_observations=state.episode_observations.at[:episode_length].set(
+                jnp.array([[0.1, 0.2, 0.3, 0.4] for _ in range(episode_length)])
+            ),
+            episode_actions=state.episode_actions.at[:episode_length].set(
+                jnp.array([[0] for _ in range(episode_length)])
+            ),
+            episode_length=episode_length,
             baseline=5.0
         )
-        
+
         # Update policy (includes baseline update)
         _, _, updated_baseline, _ = agent._update_policy(test_state)
-        
+
         # Calculate expected baseline update
         # returns[0] with rewards [1,2,3] and gamma=0.99
         expected_episode_return = 1.0 + 0.99 * 2.0 + 0.99**2 * 3.0
         expected_baseline = (1 - 0.01) * 5.0 + 0.01 * expected_episode_return
-        
+
         assert jnp.isclose(updated_baseline, expected_baseline, atol=1e-6)
     
     def test_policy_parameters_change_after_update(self, agent, state):
         """Test that policy parameters actually change after an update."""
         # Set up a complete episode
+        episode_length = 2
         test_state = state._replace(
-            episode_rewards=[2.0, 1.0],
-            episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4]) for _ in range(2)],
-            episode_actions=[jnp.array([0]) for _ in range(2)],
+            episode_rewards=state.episode_rewards.at[:episode_length].set(jnp.array([2.0, 1.0])),
+            episode_observations=state.episode_observations.at[:episode_length].set(
+                jnp.array([[0.1, 0.2, 0.3, 0.4] for _ in range(episode_length)])
+            ),
+            episode_actions=state.episode_actions.at[:episode_length].set(
+                jnp.array([[0] for _ in range(episode_length)])
+            ),
+            episode_length=episode_length,
             baseline=1.0
         )
-        
+
         # Run policy update
         new_params, _, new_baseline, metrics = agent._update_policy(test_state)
-        
+
         # Verify policy parameters changed (learning occurred)
         assert test_state.policy_params is not new_params
-        
+
         # Verify baseline was updated
         assert new_baseline != 1.0
-        
+
         # Verify metrics were computed
         expected_metrics = {"policy_loss", "baseline", "mean_advantage", "grad_norm"}
         assert all(metric in metrics for metric in expected_metrics)
@@ -221,21 +243,26 @@ class TestREINFORCEAgent:
             policy=policy,
             observation_space=env.observation_space,
             action_space=env.action_space,
+            max_episode_length=env.max_episode_length,
             baseline_alpha=0.5
         )
 
         key = jax.random.PRNGKey(42)
         state = agent.init_state(key)
 
+        episode_length = 1
         test_state = state._replace(
-            episode_rewards=[10.0],
-            episode_observations=[jnp.array([0.1, 0.2, 0.3, 0.4])],
-            episode_actions=[jnp.array([0])],
+            episode_rewards=state.episode_rewards.at[:episode_length].set(jnp.array([10.0])),
+            episode_observations=state.episode_observations.at[:episode_length].set(
+                jnp.array([[0.1, 0.2, 0.3, 0.4]])
+            ),
+            episode_actions=state.episode_actions.at[:episode_length].set(jnp.array([[0]])),
+            episode_length=episode_length,
             baseline=0.0
         )
-        
+
         _, _, updated_baseline, _ = agent._update_policy(test_state)
-        
+
         # With alpha=0.5 and episode_return=10.0, baseline should be 5.0
         expected_baseline = 0.5 * 10.0
         assert jnp.isclose(updated_baseline, expected_baseline, atol=1e-6)
