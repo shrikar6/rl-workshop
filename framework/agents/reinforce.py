@@ -52,7 +52,8 @@ class REINFORCEAgent(AgentABC):
         max_episode_length: int,
         learning_rate: float = 1e-3,
         gamma: float = 0.99,
-        baseline_alpha: float = 0.01
+        baseline_alpha: float = 0.01,
+        normalize_advantages: bool = False
     ):
         """
         Initialize REINFORCE agent.
@@ -65,6 +66,7 @@ class REINFORCEAgent(AgentABC):
             learning_rate: Step size for gradient updates
             gamma: Discount factor for future rewards
             baseline_alpha: Exponential moving average coefficient for baseline update
+            normalize_advantages: Whether to normalize advantages by std (default: False)
         """
         self.policy = policy
         self.learning_rate = learning_rate
@@ -73,6 +75,7 @@ class REINFORCEAgent(AgentABC):
         self.observation_space = observation_space
         self.action_space = action_space
         self.max_episode_length = max_episode_length
+        self.normalize_advantages = normalize_advantages
 
         # Initialize optimizer
         self.optimizer = optax.adam(learning_rate)
@@ -222,12 +225,10 @@ class REINFORCEAgent(AgentABC):
         # Update baseline using exponential moving average of episode return
         episode_return = returns[0]  # Return from episode start
         updated_baseline = (1 - baseline_alpha) * old_baseline + baseline_alpha * episode_return
-        
-        # Compute advantages and normalize
+
+        # Compute advantages (returns minus baseline for variance reduction)
         advantages = returns - old_baseline
-        # Normalize to reduce variance in gradient estimates (1e-8 prevents division by zero)
-        advantages = advantages / (jnp.std(advantages) + 1e-8)
-        
+
         return updated_baseline, advantages
 
     
@@ -255,6 +256,12 @@ class REINFORCEAgent(AgentABC):
         updated_baseline, advantages = self._compute_baseline_and_advantages_jit(
             rewards, self.gamma, state.baseline, self.baseline_alpha
         )
+
+        # Optionally normalize advantages by std to reduce variance
+        if self.normalize_advantages:
+            std = jnp.std(advantages)
+            std_clamped = jnp.maximum(std, 1e-3)  # Clamp to prevent division by ~0
+            advantages = advantages / std_clamped
 
         # Define loss function for policy gradient
         def policy_loss(params):
