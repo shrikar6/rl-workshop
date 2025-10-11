@@ -16,13 +16,16 @@ The highest priority. You should be able to swap out agents, network architectur
 ### Priority 2: JAX Idiomaticity
 Leverage JAX's strengths: functional programming, JIT compilation, vectorization, and automatic differentiation. Avoid patterns that work against JAX's design.
 
-### Priority 3: Excellent Software Engineering Practices
+### Priority 3: Performance
+Ensure code is as performant as possible by using JIT compilation wherever appropriate. Optimize the critical path (action selection, gradient computation) while maintaining the first two priorities.
+
+### Priority 4: Excellent Software Engineering Practices
 Well-structured code, clear interfaces, good separation of concerns, type hints, comprehensive tests.
 
-### Priority 4: Elegance & Minimalism
+### Priority 5: Elegance & Minimalism
 Simple, concise code without sacrificing clarity. Avoid over-engineering and premature optimization (YAGNI principle).
 
-**Note:** When Priority 3 and 4 conflict, Priority 4 wins (favor simple over "proper" when appropriate).
+**Note:** When Priority 4 and 5 conflict, Priority 5 wins (favor simple over "proper" when appropriate).
 
 ## Core Architecture
 
