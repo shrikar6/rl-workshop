@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Optional, Any
 import gymnasium as gym
 from jax import Array
 
@@ -57,7 +57,7 @@ class EnvironmentABC(ABC):
         pass
 
     @abstractmethod
-    def render(self):
+    def render(self) -> Optional[Any]:
         """
         Render the environment.
 
@@ -67,7 +67,7 @@ class EnvironmentABC(ABC):
         pass
 
     @abstractmethod
-    def close(self):
+    def close(self) -> None:
         """
         Close the environment and clean up resources.
 
