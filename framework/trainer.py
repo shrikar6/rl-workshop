@@ -1,5 +1,5 @@
 import jax
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from jax import Array
 from .environments import EnvironmentABC
 from .agents import AgentABC
@@ -38,7 +38,7 @@ class Trainer:
         self.select_action_jit = jax.jit(agent.select_action)
         self.update_jit = jax.jit(agent.update)
     
-    def train_episode(self, state: Any, trainer_key, record_video: bool = False):
+    def train_episode(self, state: Any, trainer_key: Array, record_video: bool = False) -> Tuple[Any, Array, Dict[str, float]]:
         """
         Run one complete episode and return new states and metrics.
 
@@ -84,7 +84,7 @@ class Trainer:
 
         return state, current_key, episode_metrics
     
-    def train(self, state: Any, key: Array, num_episodes: int):
+    def train(self, state: Any, key: Array, num_episodes: int) -> Tuple[Any, Array]:
         """
         Train for multiple episodes and return final states.
 
