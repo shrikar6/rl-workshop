@@ -188,15 +188,12 @@ class REINFORCEAgent(AgentABC):
         def update_and_reset(s):
             """Branch: Episode is complete, update policy and reset buffers."""
             updated_params, updated_opt_state, updated_baseline, metrics = self._update_policy(s)
-            obs_shape = self.observation_space.shape
-            action_shape = (1,)
 
-            return REINFORCEState(
+            # Reuse existing buffers instead of creating new ones
+            # Old data doesn't matter - we track valid data via episode_length
+            return s._replace(
                 policy_params=updated_params,
                 opt_state=updated_opt_state,
-                episode_observations=jnp.zeros((self.max_episode_length, *obs_shape)),
-                episode_actions=jnp.zeros((self.max_episode_length, *action_shape)),
-                episode_rewards=jnp.zeros(self.max_episode_length),
                 episode_length=0,
                 baseline=updated_baseline
             ), metrics
