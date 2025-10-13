@@ -179,12 +179,11 @@ class REINFORCEAgent(AgentABC):
             episode_rewards=state.episode_rewards.at[reward_idx].set(reward)
         )
 
-        # Only update when episode is complete
-        if done:
-            # Update policy and baseline, then reset buffers for next episode
-            updated_params, updated_opt_state, updated_baseline, metrics = self._update_policy(new_state)
-
-            # Reset episode buffers by creating fresh zero arrays
+        # Define branches for episode completion using JAX conditional
+        # (required for JIT compilation - can't use Python if with traced values)
+        def update_and_reset(s):
+            """Branch: Episode is complete, update policy and reset buffers."""
+            updated_params, updated_opt_state, updated_baseline, metrics = self._update_policy(s)
             obs_shape = self.observation_space.shape
             action_shape = (1,)
 
@@ -197,43 +196,72 @@ class REINFORCEAgent(AgentABC):
                 episode_length=0,
                 baseline=updated_baseline
             ), metrics
-        else:
-            return new_state, {}
+
+        def continue_episode(s):
+            """Branch: Episode continues, return state unchanged with empty metrics."""
+            # Return same structure as update_and_reset but with dummy metrics
+            # (jax.lax.cond requires both branches to have same pytree structure)
+            empty_metrics = {
+                "policy_loss": 0.0,
+                "baseline": 0.0,
+                "mean_advantage": 0.0,
+                "grad_norm": 0.0
+            }
+            return s, empty_metrics
+
+        # Use JAX conditional instead of Python if for JIT compatibility
+        return jax.lax.cond(done, update_and_reset, continue_episode, new_state)
     
     @staticmethod
-    @jax.jit
-    def _compute_baseline_and_advantages_jit(rewards: Array, gamma: float, old_baseline: float, baseline_alpha: float):
+    def _compute_baseline_and_advantages(
+        rewards: Array,
+        gamma: float,
+        old_baseline: float,
+        baseline_alpha: float,
+        mask: Array,
+        episode_length: int
+    ):
         """
-        JIT-compiled helper for computing updated baseline and advantages.
-        
+        Compute updated baseline and advantages for policy gradient.
+
+        Uses masking to handle variable-length episodes in pre-allocated buffers.
+        Returns advantages with padding positions set to 0 (fully masked).
+
         Args:
-            rewards: Array of rewards for the episode
+            rewards: Full pre-allocated rewards array (includes padding)
             gamma: Discount factor
             old_baseline: Current baseline value
             baseline_alpha: Learning rate for baseline update
-            
+            mask: Boolean mask indicating valid episode steps vs padding
+            episode_length: Number of valid steps in episode
+
         Returns:
-            Tuple of (updated_baseline, advantages)
+            Tuple of (updated_baseline, advantages where padding = 0)
         """
-        def discount_step(carry, reward):
-            current_return = reward + gamma * carry
+        def discount_step(carry, reward_and_mask):
+            reward, is_valid = reward_and_mask
+            # Only accumulate return for valid timesteps
+            current_return = jnp.where(is_valid, reward + gamma * carry, 0.0)
             return current_return, current_return
-        
+
         # Compute returns using scan (efficient for JAX)
         # Process rewards in reverse to accumulate discounted returns from end to start
+        # Stack rewards with mask so scan can handle both
+        rewards_masked = jnp.stack([rewards, mask], axis=1)
         _, returns = jax.lax.scan(
             discount_step,
             0.0,
-            rewards[::-1]
+            rewards_masked[::-1]
         )
         returns = returns[::-1]  # Reverse back to chronological order
-        
+
         # Update baseline using exponential moving average of episode return
         episode_return = returns[0]  # Return from episode start
         updated_baseline = (1 - baseline_alpha) * old_baseline + baseline_alpha * episode_return
 
         # Compute advantages (returns minus baseline for variance reduction)
-        advantages = returns - old_baseline
+        # Mask advantages so padding positions are 0 (encapsulate masking here)
+        advantages = jnp.where(mask, returns - old_baseline, 0.0)
 
         return updated_baseline, advantages
 
@@ -253,19 +281,27 @@ class REINFORCEAgent(AgentABC):
         Returns:
             Tuple of (updated_policy_params, updated_opt_state, updated_baseline, metrics)
         """
-        # Extract only the filled portion of episode buffers using slicing
-        rewards = state.episode_rewards[:state.episode_length]
-        observations = state.episode_observations[:state.episode_length]
-        actions = state.episode_actions[:state.episode_length]
+        # Use full pre-allocated buffers (JIT-compatible, no dynamic slicing)
+        # Create mask to identify valid episode data vs padding
+        mask = jnp.arange(self.max_episode_length) < state.episode_length
 
-        # Compute returns, updated baseline, and advantages in single JIT call
-        updated_baseline, advantages = self._compute_baseline_and_advantages_jit(
-            rewards, self.gamma, state.baseline, self.baseline_alpha
+        rewards = state.episode_rewards
+        observations = state.episode_observations
+        actions = state.episode_actions
+
+        # Compute returns, updated baseline, and advantages with masking
+        # advantages are returned already masked (padding positions = 0)
+        updated_baseline, advantages = self._compute_baseline_and_advantages(
+            rewards, self.gamma, state.baseline, self.baseline_alpha, mask, state.episode_length
         )
 
         # Optionally normalize advantages by std to reduce variance
         if self.normalize_advantages:
-            std = jnp.std(advantages)
+            # Compute std only over valid advantages (padding already = 0)
+            mean_adv = jnp.sum(advantages) / state.episode_length
+            squared_diff = (advantages - mean_adv) ** 2
+            variance = jnp.sum(squared_diff) / state.episode_length
+            std = jnp.sqrt(variance)
             std_clamped = jnp.maximum(std, 1e-3)  # Clamp to prevent division by ~0
             advantages = advantages / std_clamped
 
@@ -273,7 +309,7 @@ class REINFORCEAgent(AgentABC):
         def policy_loss(params):
             """
             Compute negative log probability weighted by returns.
-            
+
             We minimize the negative of the policy gradient objective,
             which is equivalent to maximizing expected returns.
             """
@@ -281,28 +317,31 @@ class REINFORCEAgent(AgentABC):
             log_probs = jax.vmap(
                 lambda obs, act: self.policy.get_log_prob(params, obs, act)
             )(observations, actions)
-            
+
+            # Multiply by advantages (padding naturally contributes 0)
+            weighted_log_probs = log_probs * advantages
+
             # REINFORCE loss with baseline: -log_prob * advantage
-            # Negative because we want to maximize returns (minimize negative returns)
-            loss = -jnp.mean(log_probs * advantages)
+            # Sum over all timesteps (padding contributes 0) and divide by episode length
+            loss = -jnp.sum(weighted_log_probs) / state.episode_length
             return loss
-        
+
         # Compute loss value and gradients efficiently in single pass
         loss_value, grads = jax.value_and_grad(policy_loss)(state.policy_params)
-        
+
         # Apply gradients to update parameters
         updates, new_opt_state = self.optimizer.update(grads, state.opt_state)
         new_policy_params = optax.apply_updates(state.policy_params, updates)
-        
+
         # Compute metrics to track
         grad_norm = optax.global_norm(grads)
-        mean_advantage = jnp.mean(advantages)
-        
+        mean_advantage = jnp.sum(advantages) / state.episode_length
+
         metrics = {
-            "policy_loss": float(loss_value),
-            "baseline": float(updated_baseline),
-            "mean_advantage": float(mean_advantage),
-            "grad_norm": float(grad_norm)
+            "policy_loss": loss_value,
+            "baseline": updated_baseline,
+            "mean_advantage": mean_advantage,
+            "grad_norm": grad_norm
         }
-        
+
         return new_policy_params, new_opt_state, updated_baseline, metrics

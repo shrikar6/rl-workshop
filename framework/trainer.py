@@ -32,6 +32,11 @@ class Trainer:
         self.env = environment
         self.agent = agent
         self.tracker = tracker
+
+        # Create JIT-compiled versions of agent methods for performance
+        # Compiled once here, reused throughout training
+        self.select_action_jit = jax.jit(agent.select_action)
+        self.update_jit = jax.jit(agent.update)
     
     def train_episode(self, state: Any, trainer_key, record_video: bool = False):
         """
@@ -62,10 +67,10 @@ class Trainer:
             keys = jax.random.split(current_key, 3)
             current_key = keys[0]
 
-            action, state = self.agent.select_action(state, obs, keys[1])
+            action, state = self.select_action_jit(state, obs, keys[1])
             next_obs, reward, done = self.env.step(action)
 
-            state, step_metrics = self.agent.update(state, obs, action, reward, next_obs, done, keys[2])
+            state, step_metrics = self.update_jit(state, obs, action, reward, next_obs, done, keys[2])
 
             # Collect metrics from agent updates (only when episode ends)
             if step_metrics:

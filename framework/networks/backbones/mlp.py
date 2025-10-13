@@ -2,7 +2,6 @@ import jax
 import jax.numpy as jnp
 import gymnasium as gym
 from typing import Any, Sequence, Callable, Optional, List, Tuple
-from functools import partial
 from jax import Array
 from ..base import BackboneABC
 from ...utils import get_input_dim
@@ -38,25 +37,9 @@ class MLPBackbone(BackboneABC):
         Returns:
             Feature representation of the observation
         """
-        return self._forward_jit(params, observation, self.activation)
-    
-    @staticmethod
-    @partial(jax.jit, static_argnums=(2,))  # Mark activation as static for JIT
-    def _forward_jit(params: MLPParams, observation: Array, activation: Callable[[Array], Array]) -> Array:
-        """
-        JIT-compiled MLP forward pass implementation.
-
-        Args:
-            params: MLP parameters (list of (weight, bias) tuples)
-            observation: Raw observation from environment
-            activation: Activation function to apply
-
-        Returns:
-            Feature representation of the observation
-        """
         x = observation
         for w, b in params[:-1]:
-            x = activation(jnp.dot(x, w) + b)
+            x = self.activation(jnp.dot(x, w) + b)
 
         w_final, b_final = params[-1]
         return jnp.dot(x, w_final) + b_final

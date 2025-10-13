@@ -48,7 +48,8 @@ class DiscretePolicyHead(PolicyHeadABC):
         Returns:
             Logits for all actions
         """
-        return self._forward_jit(params, features)
+        w, b = params
+        return jnp.dot(features, w) + b
 
     def sample_action(self, params: Tuple[Array, Array], features: Array, key: Array) -> Array:
         """
@@ -62,7 +63,9 @@ class DiscretePolicyHead(PolicyHeadABC):
         Returns:
             Sampled discrete action as Array([action_index])
         """
-        return self._sample_action_jit(params, features, key)
+        logits = self.forward(params, features)
+        action = jax.random.categorical(key, logits)
+        return action.reshape(-1)
 
     def get_log_prob(self, params: Tuple[Array, Array], features: Array, action: Array) -> float:
         """
@@ -78,28 +81,7 @@ class DiscretePolicyHead(PolicyHeadABC):
         Returns:
             Log probability of the specified action
         """
-        return self._get_log_prob_jit(params, features, action)
-
-    @staticmethod
-    @jax.jit
-    def _forward_jit(params: Tuple[Array, Array], features: Array) -> Array:
-        """JIT-compiled forward pass to compute logits."""
-        w, b = params
-        return jnp.dot(features, w) + b
-
-    @staticmethod
-    @jax.jit
-    def _sample_action_jit(params: Tuple[Array, Array], features: Array, key: Array) -> Array:
-        """JIT-compiled discrete action sampling."""
-        logits = DiscretePolicyHead._forward_jit(params, features)
-        action = jax.random.categorical(key, logits)
-        return action.reshape(-1)
-
-    @staticmethod
-    @jax.jit
-    def _get_log_prob_jit(params: Tuple[Array, Array], features: Array, action: Array) -> float:
-        """JIT-compiled log probability computation."""
-        logits = DiscretePolicyHead._forward_jit(params, features)
+        logits = self.forward(params, features)
         log_probs = jax.nn.log_softmax(logits)
         action_idx = action[0].astype(int)
         return log_probs[action_idx]
