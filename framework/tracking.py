@@ -5,7 +5,7 @@ Handles metrics collection, logging, and visualization in a single class.
 """
 
 import shutil
-import jax.numpy as jnp
+import numpy as np
 import matplotlib.pyplot as plt
 import imageio
 from pathlib import Path
@@ -91,9 +91,9 @@ class Tracker:
             
             for name, values in self.metrics.items():
                 recent = values[-self.window:] if len(values) > self.window else values
-                recent_array = jnp.array(recent)
-                mean_val = float(jnp.mean(recent_array))
-                std_val = float(jnp.std(recent_array))
+                recent_array = np.array(recent)
+                mean_val = float(np.mean(recent_array))
+                std_val = float(np.std(recent_array))
                 log_parts.append(f"{name}: mean={mean_val:.4f}, std={std_val:.4f}")
             
             log_message = log_str + " | ".join(log_parts)
@@ -144,9 +144,9 @@ class Tracker:
         # Create individual plots for each metric
         for metric_name in metrics_to_plot:
             fig, (ax_mean, ax_var) = plt.subplots(2, 1, figsize=(10, 8))
-            
-            values = jnp.array(self.metrics[metric_name])
-            episodes = jnp.arange(1, len(values) + 1)
+
+            values = np.array(self.metrics[metric_name])
+            episodes = np.arange(1, len(values) + 1)
             
             # Plot mean subplot
             ax_mean.plot(episodes, values, alpha=0.3, label=f'{metric_name} (raw)', color='blue')
@@ -154,16 +154,15 @@ class Tracker:
             # Compute and plot moving average and variance if we have enough data
             if len(values) >= self.window:
                 # Compute moving mean
-                kernel = jnp.ones(self.window) / self.window
-                padded = jnp.concatenate([jnp.full(self.window-1, values[0]), values])
-                moving_avg = jnp.convolve(padded, kernel, mode='valid')
-                
+                kernel = np.ones(self.window) / self.window
+                padded = np.concatenate([np.full(self.window-1, values[0]), values])
+                moving_avg = np.convolve(padded, kernel, mode='valid')
+
                 # Compute moving standard deviation
-                moving_std = jnp.zeros(len(values))
-                for j in range(len(values)):
-                    window_start = max(0, j - self.window + 1)
-                    window_values = values[window_start:j+1]
-                    moving_std = moving_std.at[j].set(float(jnp.std(window_values)))
+                moving_std = np.array([
+                    np.std(values[max(0, j - self.window + 1):j+1])
+                    for j in range(len(values))
+                ])
                 
                 # Plot moving average
                 ax_mean.plot(episodes, moving_avg, label=f'{metric_name} (mean, window={self.window})', 
@@ -218,9 +217,9 @@ class Tracker:
         values = self.metrics[metric]
         final_window = window if window is not None else self.window
         final_values = values[-final_window:] if len(values) > final_window else values
-        final_array = jnp.array(final_values)
-        mean_value = float(jnp.mean(final_array))
-        std_value = float(jnp.std(final_array))
+        final_array = np.array(final_values)
+        mean_value = float(np.mean(final_array))
+        std_value = float(np.std(final_array))
         
         final_message = f"\nTraining completed!"
         episode_message = f"Total episodes: {self.episode_count}"
