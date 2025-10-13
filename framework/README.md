@@ -136,5 +136,5 @@ class MLPBackbone(BackboneABC):
 
 For design decisions specific to subsystems:
 - Networks: See `framework/networks/README.md`
-- Agents: (To be created when patterns stabilize)
-- Environments: (To be created when patterns stabilize)
+- Agents: See `framework/agents/README.md`
+- Environments: See `framework/environments/README.md`
