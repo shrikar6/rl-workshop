@@ -69,10 +69,14 @@ class REINFORCEAgent(AgentABC):
             normalize_advantages: Whether to normalize advantages by std (default: False)
         """
         # Validate hyperparameters
-        assert 0 <= gamma <= 1, f"gamma must be in [0,1], got {gamma}"
-        assert 0 <= baseline_alpha <= 1, f"baseline_alpha must be in [0,1], got {baseline_alpha}"
-        assert learning_rate > 0, f"learning_rate must be positive, got {learning_rate}"
-        assert max_episode_length > 0, f"max_episode_length must be positive, got {max_episode_length}"
+        if not (0 <= gamma <= 1):
+            raise ValueError(f"gamma must be in [0,1], got {gamma}")
+        if not (0 <= baseline_alpha <= 1):
+            raise ValueError(f"baseline_alpha must be in [0,1], got {baseline_alpha}")
+        if learning_rate <= 0:
+            raise ValueError(f"learning_rate must be positive, got {learning_rate}")
+        if max_episode_length <= 0:
+            raise ValueError(f"max_episode_length must be positive, got {max_episode_length}")
 
         self.policy = policy
         self.learning_rate = learning_rate
