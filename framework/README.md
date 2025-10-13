@@ -26,27 +26,7 @@ features = backbone.forward(params, observation)
 
 **Why:** Configuration defines the architecture (doesn't change during training), while parameters are the learned weights (updated every step). Keeping them separate enables JAX's functional paradigm for params while maintaining OOP convenience for configuration. This makes it easy to swap architectures (just create a new instance) and enables JAX pytree operations on params.
 
-### 2. Instance Methods with JIT Delegation Pattern
-
-**What:** Public API methods are instance methods that can access configuration, and they delegate to static JIT-compiled helpers for performance.
-
-**Example:**
-```python
-class MLPBackbone:
-    def forward(self, params, observation):
-        # Instance method - accesses self.activation
-        return self._forward_jit(params, observation, self.activation)
-
-    @staticmethod
-    @partial(jax.jit, static_argnums=(2,))
-    def _forward_jit(params, observation, activation):
-        # Pure function - JIT compilable
-        # ... computation ...
-```
-
-**Why:** Instance methods allow components to access their configuration (like activation functions), enabling flexible, parameterizable behavior. Delegation to static JIT'd helpers ensures JAX gets pure functions for compilation. This pattern follows established JAX libraries like Flax and Haiku.
-
-### 3. Functional State Management
+### 2. Functional State Management
 
 **What:** Agent state is immutable. Methods return new state objects rather than mutating existing state. All randomness is explicit via JAX PRNGKey splitting.
 
@@ -70,7 +50,7 @@ def select_action(self, state, observation, key):
 
 **Why:** Immutable state is easier to reason about, debug, and makes training reproducible. This is core to JAX's functional programming paradigm. Explicit randomness via PRNGKey ensures experiments are fully reproducible.
 
-### 4. Composition Over Inheritance
+### 3. Composition Over Inheritance
 
 **What:** Complex components are built by composing simpler components rather than deep inheritance hierarchies. For example, `ComposedPolicyNetwork` composes a `Backbone` + `Head`.
 
@@ -91,39 +71,11 @@ policy_tanh = ComposedPolicyNetwork(
 
 **Why:** Composition maximizes plug-and-play flexibility. Any backbone can work with any head. Shallow hierarchies are easier to understand than deep inheritance trees.
 
-### 5. JIT Compilation Strategy: Performance Through Delegation Pattern
+### 4. JIT Compilation Strategy
 
-**What:** We use JIT compilation to optimize for performance (Priority 3) while maintaining modularity (Priority 1) and JAX idiomaticity (Priority 2). The delegation pattern enables this by separating public APIs from JIT-compiled implementation.
+**What:** JIT at the highest level possible - the agent level.
 
-**The Delegation Pattern:**
-
-Public API methods are instance methods that can access configuration. They delegate to static JIT-compiled helpers for performance:
-
-```python
-class MLPBackbone:
-    def forward(self, params, observation):
-        # Instance method - accesses configuration (self.activation)
-        return self._forward_jit(params, observation, self.activation)
-
-    @staticmethod
-    @partial(jax.jit, static_argnums=(2,))
-    def _forward_jit(params, observation, activation):
-        # Static JIT'd helper - pure function for optimal compilation
-        x = observation
-        for w, b in params[:-1]:
-            x = activation(jnp.dot(x, w) + b)
-        w_final, b_final = params[-1]
-        return jnp.dot(x, w_final) + b_final
-```
-
-**Why:** This pattern:
-- Preserves clean, configurable public APIs (Priority 1: Modularity)
-- Enables JAX to compile and fuse pure functions optimally (Priority 2: JAX Idiomaticity)
-- Maximizes performance through JIT compilation (Priority 3: Performance)
-- Is used by production JAX libraries like Flax and Haiku
-- Adds minimal complexity (one static helper per performance-critical method)
-
-We apply JIT compilation where it improves performance without compromising Priorities 1-2. The specific decisions about what to JIT evolve as we optimize the codebase.
+**Why:** JIT'ing at the top level allows JAX to trace through the entire call chain and fuse all operations into optimized kernels, maximizing performance (Priority 3).
 
 ## Implementation Conventions
 
