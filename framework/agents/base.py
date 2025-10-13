@@ -17,7 +17,7 @@ class AgentABC(ABC):
     mutating existing state.
 
     Subclasses should implement:
-        __init__(self, policy: PolicyABC, observation_space: gym.Space, action_space: gym.Space, **kwargs)
+        __init__(self, policy: PolicyNetworkABC, observation_space: gym.Space, action_space: gym.Space, **kwargs)
     to initialize with policy and environment space specifications, and create initial state.
     """
     
