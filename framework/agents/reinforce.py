@@ -212,9 +212,9 @@ class REINFORCEAgent(AgentABC):
 
         # Use JAX conditional instead of Python if for JIT compatibility
         return jax.lax.cond(done, update_and_reset, continue_episode, new_state)
-    
-    @staticmethod
-    def _compute_baseline_and_advantages(
+
+    def compute_baseline_and_advantages(
+        self,
         rewards: Array,
         gamma: float,
         old_baseline: float,
@@ -292,7 +292,7 @@ class REINFORCEAgent(AgentABC):
 
         # Compute returns, updated baseline, and advantages with masking
         # advantages are returned already masked (padding positions = 0)
-        updated_baseline, advantages = self._compute_baseline_and_advantages(
+        updated_baseline, advantages = self.compute_baseline_and_advantages(
             rewards, self.gamma, state.baseline, self.baseline_alpha, mask, state.episode_length
         )
 
