@@ -60,6 +60,31 @@ policy_continuous = ComposedPolicyNetwork(backbone, head_continuous)
 - Validates dimension compatibility (backbone.output_dim must equal head.input_dim)
 - Parameters structure: Tuple of (backbone_params, head_params)
 
+## JIT Compilation Strategy
+
+**Pattern:** Network components are NOT individually JIT-compiled. Instead, they are JIT-compiled as part of higher-level agent methods (see `framework/README.md` JIT strategy).
+
+**How it works:**
+1. Agent methods (`select_action`, `update`) are JIT-compiled at the agent level
+2. When JAX traces these methods, it follows calls through the entire network stack
+3. Instance attributes (like `self.activation` in MLPBackbone) are traced and baked into the compiled code
+4. The entire computation graph is optimized as a single unit
+
+**Why this is good:**
+- Allows JAX to fuse operations across the entire computation (backbone → head → loss)
+- Simpler implementation - no need for static helper methods
+- Configuration (activation functions, etc.) is immutable after initialization, so tracing it is fine
+
+**Example of what gets JIT'd together:**
+```python
+# In Trainer, agent methods are JIT-compiled:
+self.select_action_jit = jax.jit(agent.select_action)
+
+# When traced, JAX compiles the entire chain:
+agent.select_action → policy.sample_action → backbone.forward + head.forward
+# All as a single optimized computation
+```
+
 ## Implementation Patterns
 
 ### Creating a New Backbone
@@ -68,20 +93,16 @@ policy_continuous = ComposedPolicyNetwork(backbone, head_continuous)
 class MyBackbone(BackboneABC):
     def __init__(self, output_dim, my_config):
         super().__init__(output_dim)
-        self.my_config = my_config
+        self.my_config = my_config  # Immutable after init
 
     def init_params(self, key, observation_space):
         # Use self.my_config to create params
         return params
 
     def forward(self, params, observation):
-        return self._forward_jit(params, observation, self.my_config)
-
-    @staticmethod
-    @jax.jit
-    def _forward_jit(params, observation, my_config):
-        # Pure computation
-        return features
+        # Access instance attributes directly - JAX will trace them
+        result = some_computation(observation, self.my_config)
+        return result
 ```
 
 ### Creating a New Head
@@ -90,21 +111,18 @@ class MyBackbone(BackboneABC):
 class MyHead(PolicyHeadABC):  # or ValueHeadABC, etc.
     def __init__(self, input_dim, my_config):
         super().__init__(input_dim)
-        self.my_config = my_config
+        self.my_config = my_config  # Immutable after init
 
     def init_params(self, key, action_space):
         # Use self.input_dim and action_space
         return params
 
     def forward(self, params, features):
-        return self._forward_jit(params, features)
-
-    @staticmethod
-    @jax.jit
-    def _forward_jit(params, features):
-        # Pure computation
+        # Access instance attributes directly - JAX will trace them
         return output
 ```
+
+**Key principle:** Configuration lives in instance attributes (set once during `__init__`). Parameters live in the `params` argument (updated during training). JAX traces through both.
 
 ## Current Implementations
 

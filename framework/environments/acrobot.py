@@ -1,6 +1,6 @@
 import gymnasium as gym
 import jax.numpy as jnp
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any
 from jax import Array
 from .base import EnvironmentABC
 
@@ -69,10 +69,10 @@ class AcrobotEnv(EnvironmentABC):
         """Maximum episode length: 500 steps"""
         return self.env.spec.max_episode_steps
 
-    def render(self):
+    def render(self) -> Optional[Any]:
         """Render the environment."""
         return self.env.render()
-    
-    def close(self):
+
+    def close(self) -> None:
         """Close the environment and clean up resources."""
         self.env.close()

@@ -40,7 +40,7 @@ class AgentABC(ABC):
     def update(self, state: Any, obs: Array, action: Array, reward: float, next_obs: Array, done: bool, key: Array) -> Tuple[Any, Dict[str, float]]:
         """
         Update agent from experience and return new state and metrics.
-        
+
         Args:
             state: Current agent state
             obs: Current observation
@@ -49,8 +49,21 @@ class AgentABC(ABC):
             next_obs: Next observation
             done: Whether episode ended
             key: JAX random key for stochastic updates
-            
+
         Returns:
             Tuple of (new agent state, metrics dict)
+        """
+        pass
+
+    @abstractmethod
+    def init_state(self, key: Array) -> Any:
+        """
+        Create initial agent state.
+
+        Args:
+            key: JAX random key for parameter initialization
+
+        Returns:
+            Initial agent state (structure defined by each agent implementation)
         """
         pass
