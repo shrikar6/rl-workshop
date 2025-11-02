@@ -73,9 +73,31 @@ policy_tanh = ComposedPolicyNetwork(
 
 ### 4. JIT Compilation Strategy
 
-**What:** JIT at the highest level possible - the agent level.
+**What:** JIT at the highest level possible - the agent level. Trainer JIT-compiles agent methods during initialization, and JAX traces through the entire computation graph (agent → networks → operations).
 
-**Why:** JIT'ing at the top level allows JAX to trace through the entire call chain and fuse all operations into optimized kernels, maximizing performance (Priority 3).
+**How it works:**
+```python
+# In Trainer.__init__
+self.select_action_jit = jax.jit(agent.select_action)
+self.update_jit = jax.jit(agent.update)
+
+# These JIT'd methods are called during training:
+action, state = self.select_action_jit(state, obs, key)
+state, metrics = self.update_jit(state, obs, action, reward, next_obs, done, key)
+```
+
+When JAX traces these methods, it follows the entire call chain:
+- `agent.select_action` → `policy.sample_action` → `backbone.forward` + `head.forward` + sampling
+- `agent.update` → `policy.get_log_prob` → gradient computation → optimizer update
+
+All of this gets compiled into a single optimized computation graph per method.
+
+**Why this approach:**
+- **Performance (Priority 3):** JAX can fuse operations across the entire computation (network forward passes, loss calculation, gradients) into efficient kernels
+- **Simplicity:** Individual components (networks, heads) don't need to worry about JIT decorators
+- **Flexibility:** Configuration (like activation functions in networks) is traced and baked into compiled code, which is fine since it's immutable after initialization
+
+**Note:** Components like networks are NOT individually JIT'd. They get JIT-compiled as part of the agent methods. See `framework/networks/README.md` for details on how this affects network implementation.
 
 ## Implementation Conventions
 
