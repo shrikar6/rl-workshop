@@ -107,7 +107,3 @@ See `experiments/cartpole_reinforce.py` for an example of how to compose agents,
 ```bash
 pytest tests/
 ```
-
----
-
-**Co-authored with Claude 🤓🤖**
