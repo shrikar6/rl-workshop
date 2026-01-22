@@ -4,7 +4,7 @@ A personal reinforcement learning workshop designed for rapid experimentation wi
 
 ## Philosophy
 
-This is a **learning and experimentation workshop**, not a production library. The goal is to minimize friction when trying new RL algorithms, network architectures, and environment configurations while maintaining complete flexibility to explore novel ideas.
+The goal is to minimize friction when trying new RL algorithms, network architectures, and environment configurations while maintaining complete flexibility to explore novel ideas.
 
 ## Design Priorities
 
@@ -14,18 +14,18 @@ All design decisions in this codebase are guided by these priorities (in order):
 The highest priority. You should be able to swap out agents, network architectures, environments, and any other component with minimal code changes. Experimentation should be fast and frictionless.
 
 ### Priority 2: JAX Idiomaticity
-Leverage JAX's strengths: functional programming, JIT compilation, vectorization, and automatic differentiation. Avoid patterns that work against JAX's design.
+Leverage functional programming, JIT compilation, vectorization, and automatic differentiation. Avoid patterns that work against JAX's design.
 
 ### Priority 3: Performance
 Ensure code is as performant as possible by using JIT compilation wherever appropriate. Optimize the critical path (action selection, gradient computation) while maintaining the first two priorities.
 
-### Priority 4: Excellent Software Engineering Practices
+### Priority 4a: Excellent Software Engineering Practices
 Well-structured code, clear interfaces, good separation of concerns, type hints, comprehensive tests.
 
-### Priority 5: Elegance & Minimalism
+### Priority 4b: Elegance & Minimalism
 Simple, concise code without sacrificing clarity. Avoid over-engineering and premature optimization (YAGNI principle).
 
-**Note:** When Priority 4 and 5 conflict, Priority 5 wins (favor simple over "proper" when appropriate).
+**Note:** 4a and 4b conflict often, but we favor simple over "proper" when appropriate, and vice versa otherwise. It's a judgement call.
 
 ## Core Architecture
 
