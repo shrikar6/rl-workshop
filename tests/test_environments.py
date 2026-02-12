@@ -111,8 +111,8 @@ class TestEnvironments:
             if done:
                 break
         
-        # Episode should terminate at some point
-        assert done or step == max_steps - 1
+        # Episode should terminate within the step limit
+        assert done, f"{env_config['name']} episode did not terminate within {max_steps} steps"
         env.close()
     
     def test_with_seed(self, env_config):
@@ -191,8 +191,11 @@ class TestEnvironments:
             _, reward, done = env.step(action)
             rewards.append(reward)
             
-            # Check reward is within expected range (with some tolerance)
-            assert min_reward - 10 <= reward <= max_reward + 10
+            # Check reward is within expected range
+            assert min_reward - 1 <= reward <= max_reward + 1, (
+                f"{env_config['name']} reward {reward} outside expected range "
+                f"[{min_reward - 1}, {max_reward + 1}]"
+            )
             
             if done:
                 break

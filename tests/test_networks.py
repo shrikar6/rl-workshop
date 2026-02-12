@@ -193,11 +193,10 @@ class TestComposedPolicyNetwork:
             action = composed_policy.sample_action(policy_params, sample_observation, key)
             actions.append(action[0])
         
-        # Should see both actions (0 and 1) with high probability
-        # Convert JAX arrays to Python ints for set operations
+        # A randomly initialized policy should produce both actions across 20 different keys
         action_values = [int(action) for action in actions]
         unique_actions = set(action_values)
-        assert len(unique_actions) >= 1  # At least some variation (might be deterministic)
+        assert len(unique_actions) >= 2
     
     def test_policy_log_prob(self, composed_policy, policy_params, sample_observation):
         """Test that policy can compute log probabilities."""

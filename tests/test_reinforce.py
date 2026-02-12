@@ -126,13 +126,16 @@ class TestREINFORCEAgent:
         key, action_key = jax.random.split(key)
         action, new_state = agent.select_action(state, obs, action_key)
 
-        # After select_action, episode_length should be 1 (obs and action stored)
+        # After select_action: counter incremented and data actually stored
         assert new_state.episode_length == 1
+        assert jnp.allclose(new_state.episode_observations[0], obs)
+        assert jnp.array_equal(new_state.episode_actions[0], action)
 
         new_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
 
-        # After update (not done), episode_length should still be 1 (reward stored)
+        # After update (not done): reward stored, counter unchanged
         assert new_state.episode_length == 1
+        assert new_state.episode_rewards[0] == 1.0
 
         final_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
 
@@ -151,6 +154,7 @@ class TestREINFORCEAgent:
         action, new_state = agent.select_action(state, obs, action_key)
         new_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=False, key=key)
 
+        # Params should be unchanged after non-done update
         params_unchanged = jax.tree.map(
             lambda x, y: jnp.allclose(x, y),
             initial_params, new_state.policy_params
@@ -159,29 +163,57 @@ class TestREINFORCEAgent:
 
         final_state, _ = agent.update(new_state, obs, action, 1.0, obs, done=True, key=key)
 
-        # After episode ends, buffers should be reset
+        # After episode ends: buffers reset AND params actually updated
         assert final_state.episode_length == 0
+        params_same = jax.tree.map(
+            lambda x, y: jnp.allclose(x, y),
+            initial_params, final_state.policy_params
+        )
+        assert not jax.tree_util.tree_all(params_same)
     
-    def test_constant_returns_normalization(self, agent, state):
-        """Test normalization when all returns are the same (std = 0)."""
-        # Create test state with episode buffers filled with constant rewards
-        episode_length = 3
-        test_state = state._replace(
-            episode_rewards=state.episode_rewards.at[:episode_length].set(jnp.array([1.0, 1.0, 1.0])),
-            episode_observations=state.episode_observations.at[:episode_length].set(
-                jnp.array([[0.1, 0.2, 0.3, 0.4] for _ in range(episode_length)])
-            ),
-            episode_actions=state.episode_actions.at[:episode_length].set(
-                jnp.array([[0] for _ in range(episode_length)])
-            ),
-            episode_length=episode_length,
-            baseline=0.0
+    def test_constant_returns_normalization(self):
+        """Test normalization with near-zero advantage std doesn't produce NaN/Inf."""
+        env = CartPoleEnv()
+        policy = ComposedPolicyNetwork(
+            backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
+            head=DiscretePolicyHead(input_dim=16)
         )
 
-        updated_params, updated_opt_state, updated_baseline, _ = agent._update_policy(test_state)
+        # Must enable normalization to exercise the normalization code path
+        agent = REINFORCEAgent(
+            policy=policy,
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            max_episode_length=env.max_episode_length,
+            learning_rate=1e-3,
+            gamma=0.99,
+            normalize_advantages=True
+        )
 
-        assert updated_params is not None
-        assert updated_opt_state is not None
+        key = jax.random.PRNGKey(0)
+        state = agent.init_state(key)
+
+        # Single step with baseline equal to the return → advantage = 0, std = 0
+        # This is the dangerous case: normalization divides by std, which is 0
+        episode_length = 1
+        test_state = state._replace(
+            episode_rewards=state.episode_rewards.at[0].set(5.0),
+            episode_observations=state.episode_observations.at[0].set(
+                jnp.array([0.1, 0.2, 0.3, 0.4])
+            ),
+            episode_actions=state.episode_actions.at[0].set(jnp.array([0])),
+            episode_length=episode_length,
+            baseline=5.0  # Equal to the single-step return
+        )
+
+        updated_params, _, updated_baseline, metrics = agent._update_policy(test_state)
+
+        # Core assertion: no NaN/Inf anywhere in the results
+        assert jnp.isfinite(metrics["policy_loss"])
+        assert jnp.isfinite(metrics["grad_norm"])
+        assert jnp.isfinite(updated_baseline)
+        params_finite = jax.tree.map(lambda x: jnp.all(jnp.isfinite(x)), updated_params)
+        assert jax.tree_util.tree_all(params_finite)
     
     def test_baseline_initialization(self, agent, state):
         """Test baseline starts at zero."""
@@ -233,15 +265,22 @@ class TestREINFORCEAgent:
         # Run policy update
         new_params, _, new_baseline, metrics = agent._update_policy(test_state)
 
-        # Verify policy parameters changed (learning occurred)
-        assert test_state.policy_params is not new_params
+        # Verify policy parameters actually changed in value (not just identity)
+        params_same = jax.tree.map(
+            lambda x, y: jnp.allclose(x, y),
+            test_state.policy_params, new_params
+        )
+        assert not jax.tree_util.tree_all(params_same)
 
         # Verify baseline was updated
         assert new_baseline != 1.0
 
-        # Verify metrics were computed
+        # Verify metrics are present and sensible
         expected_metrics = {"policy_loss", "baseline", "mean_advantage", "grad_norm"}
         assert all(metric in metrics for metric in expected_metrics)
+        assert jnp.isfinite(metrics["policy_loss"])
+        assert jnp.isfinite(metrics["grad_norm"])
+        assert metrics["grad_norm"] > 0
     
     def test_baseline_with_different_alpha(self):
         """Test baseline update with different alpha values."""
