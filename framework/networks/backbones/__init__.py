@@ -1,9 +1,6 @@
 """
-Policy backbone implementations.
+Network backbone implementations.
 
 Backbones extract features from raw observations that can be used by
-different types of output heads (discrete, continuous, etc.).
+different types of output heads (discrete, continuous, value, etc.).
 """
-
-from ..base import BackboneABC
-from .mlp import MLPBackbone

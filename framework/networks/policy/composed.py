@@ -3,8 +3,8 @@ import gymnasium as gym
 from typing import Any, Tuple
 from jax import Array
 from .base import PolicyNetworkABC
-from ..backbones import BackboneABC
-from .heads import PolicyHeadABC
+from ..base import BackboneABC
+from .base import PolicyHeadABC
 
 
 class ComposedPolicyNetwork(PolicyNetworkABC):

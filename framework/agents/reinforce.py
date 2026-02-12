@@ -14,7 +14,7 @@ import optax
 import gymnasium as gym
 from typing import NamedTuple, Any, Tuple, Dict
 from jax import Array
-from ..networks.policy import PolicyNetworkABC
+from ..networks.policy.base import PolicyNetworkABC
 from .base import AgentABC
 
 

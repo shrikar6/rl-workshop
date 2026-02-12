@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Tuple, Dict
-import gymnasium as gym
 from jax import Array
-from ..networks import NetworkABC
 
 
 class AgentABC(ABC):

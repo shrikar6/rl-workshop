@@ -5,18 +5,12 @@ Provides core components for reinforcement learning experiments with
 focus on simplicity, modularity, and ease of experimentation.
 """
 
-# Module imports
-from . import agents
-from . import environments
-from . import networks
-
-# Core classes
 from .trainer import Trainer
 from .tracking import Tracker
-
-# Commonly used components
-from .agents import REINFORCEAgent
-from .environments import CartPoleEnv, AcrobotEnv, LunarLanderEnv
-from .networks import ComposedPolicyNetwork
-from .networks.backbones import MLPBackbone
-from .networks.policy.heads import DiscretePolicyHead
+from .agents.reinforce import REINFORCEAgent
+from .environments.cartpole import CartPoleEnv
+from .environments.acrobot import AcrobotEnv
+from .environments.lunarlander import LunarLanderEnv
+from .networks.policy.composed import ComposedPolicyNetwork
+from .networks.backbones.mlp import MLPBackbone
+from .networks.policy.heads.discrete import DiscretePolicyHead

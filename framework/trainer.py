@@ -1,8 +1,8 @@
 import jax
 from typing import Optional, Dict, Any, Tuple
 from jax import Array
-from .environments import EnvironmentABC
-from .agents import AgentABC
+from .environments.base import EnvironmentABC
+from .agents.base import AgentABC
 from .tracking import Tracker
 
 
