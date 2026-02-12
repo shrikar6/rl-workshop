@@ -57,58 +57,35 @@ class BackboneABC(ABC):
 class HeadABC(ABC):
     """
     Abstract base class for all network heads.
-    
-    A head converts feature representations into outputs (actions, Q-values, etc.).
+
+    A head converts feature representations into task-specific outputs.
     Different head types handle different algorithm requirements while working
     with the same backbone feature extractors.
-    
+
     Architecture decisions (input dimension) are made at construction time.
-    Environment binding (action space) happens at parameter initialization time.
+    Subclasses define their own init_params signatures based on what
+    information they need (e.g., policy heads need action_space,
+    value heads do not).
     """
-    
+
     def __init__(self, input_dim: int):
         """
         Initialize head architecture.
-        
+
         Args:
             input_dim: Dimensionality of input features (must match backbone output_dim)
         """
         self.input_dim = input_dim
-    
-    @abstractmethod
-    def init_params(self, key: Array, action_space: gym.Space) -> Any:
-        """
-        Initialize head parameters for a specific action space.
-        
-        Args:
-            key: JAX random key for parameter initialization
-            action_space: Gymnasium space describing actions
-            
-        Returns:
-            Initial head parameters
-        """
-        pass
 
 
 class NetworkABC(ABC):
     """
     Abstract base class for all networks.
-    
+
     A network combines backbones and heads to create complete function approximators.
     Different network types handle different algorithm requirements (policy vs value).
+
+    Subclasses define their own init_params signatures based on what
+    information they need (e.g., policy networks need both observation_space
+    and action_space, value networks only need observation_space).
     """
-    
-    @abstractmethod
-    def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Any:
-        """
-        Initialize network parameters.
-        
-        Args:
-            key: JAX random key for parameter initialization
-            observation_space: Gymnasium space describing observations
-            action_space: Gymnasium space describing actions
-            
-        Returns:
-            Initial network parameters
-        """
-        pass

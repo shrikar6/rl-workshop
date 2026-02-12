@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from typing import Any
+import gymnasium as gym
 from jax import Array
 from ..base import NetworkABC, HeadABC
 
@@ -11,6 +12,20 @@ class PolicyHeadABC(HeadABC):
     Policy heads convert features into action distributions for policy-based
     RL algorithms (REINFORCE, PPO, A2C, etc.).
     """
+
+    @abstractmethod
+    def init_params(self, key: Array, action_space: gym.Space) -> Any:
+        """
+        Initialize head parameters for a specific action space.
+
+        Args:
+            key: JAX random key for parameter initialization
+            action_space: Gymnasium space describing actions
+
+        Returns:
+            Initial head parameters
+        """
+        pass
 
     @abstractmethod
     def forward(self, params: Any, features: Array) -> Array:
@@ -60,11 +75,26 @@ class PolicyHeadABC(HeadABC):
 class PolicyNetworkABC(NetworkABC):
     """
     Abstract base class for policy networks.
-    
+
     Policy networks map states to action distributions for policy-based
     RL algorithms (REINFORCE, PPO, A2C, etc.).
     """
-    
+
+    @abstractmethod
+    def init_params(self, key: Array, observation_space: gym.Space, action_space: gym.Space) -> Any:
+        """
+        Initialize network parameters.
+
+        Args:
+            key: JAX random key for parameter initialization
+            observation_space: Gymnasium space describing observations
+            action_space: Gymnasium space describing actions
+
+        Returns:
+            Initial network parameters
+        """
+        pass
+
     @abstractmethod
     def forward(self, params: Any, observation: Array) -> Array:
         """
