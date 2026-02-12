@@ -59,7 +59,7 @@ class TestREINFORCEAgent:
         assert agent.baseline_alpha == 0.01
     
     def test_baseline_and_advantages_computation(self):
-        """Test the JIT-compiled baseline and advantages computation."""
+        """Test baseline and advantages computation with pre-allocated buffers."""
         env = CartPoleEnv()
         policy = ComposedPolicyNetwork(
             backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
@@ -75,32 +75,45 @@ class TestREINFORCEAgent:
             baseline_alpha=0.1
         )
 
+        max_len = env.max_episode_length
+
         # Test simple single-step case
-        rewards = jnp.array([2.0])
+        episode_length = 1
+        rewards = jnp.zeros(max_len).at[0].set(2.0)
+        mask = jnp.arange(max_len) < episode_length
         old_baseline = 1.0
-        
-        updated_baseline, advantages = agent._compute_baseline_and_advantages_jit(
-            rewards, 0.9, old_baseline, 0.1
+
+        updated_baseline, advantages = agent.compute_baseline_and_advantages(
+            rewards, 0.9, old_baseline, 0.1, mask, episode_length
         )
-        
+
         # Expected: return = 2.0, new_baseline = 0.9*1.0 + 0.1*2.0 = 1.1
         assert jnp.isclose(updated_baseline, 1.1, atol=1e-6)
-        assert advantages.shape == (1,)
-        
-        # Test multi-step case  
-        rewards = jnp.array([1.0, 2.0])
+        # Advantage = return - old_baseline = 2.0 - 1.0 = 1.0
+        assert jnp.isclose(advantages[0], 1.0, atol=1e-6)
+        # Padding positions should be masked to 0
+        assert jnp.all(advantages[1:] == 0.0)
+
+        # Test multi-step case
+        episode_length = 2
+        rewards = jnp.zeros(max_len).at[0].set(1.0).at[1].set(2.0)
+        mask = jnp.arange(max_len) < episode_length
         old_baseline = 0.0
-        
-        updated_baseline, advantages = agent._compute_baseline_and_advantages_jit(
-            rewards, 0.9, old_baseline, 0.1
+
+        updated_baseline, advantages = agent.compute_baseline_and_advantages(
+            rewards, 0.9, old_baseline, 0.1, mask, episode_length
         )
-        
+
         # Expected returns: [1.0 + 0.9*2.0, 2.0] = [2.8, 2.0]
         # Expected baseline update: 0.9*0.0 + 0.1*2.8 = 0.28
         assert jnp.isclose(updated_baseline, 0.28, atol=1e-6)
-        assert advantages.shape == (2,)
-        
-        # Verify types and finite values
+        # Advantages = returns - old_baseline(0.0) = returns
+        assert jnp.isclose(advantages[0], 2.8, atol=1e-6)
+        assert jnp.isclose(advantages[1], 2.0, atol=1e-6)
+        # Padding should be 0
+        assert jnp.all(advantages[2:] == 0.0)
+
+        # Verify finite values
         assert jnp.isfinite(updated_baseline)
         assert jnp.all(jnp.isfinite(advantages))
     

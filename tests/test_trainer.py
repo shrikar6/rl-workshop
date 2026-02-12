@@ -5,7 +5,8 @@ Tests for Trainer class.
 import tempfile
 import jax
 import jax.numpy as jnp
-from unittest.mock import Mock
+from typing import NamedTuple
+from jax import Array
 from framework import Trainer, Tracker
 from framework.environments.base import EnvironmentABC
 from framework.agents.base import AgentABC
@@ -15,19 +16,23 @@ class MockEnvironment(EnvironmentABC):
     """Mock environment for testing."""
 
     def __init__(self, episode_length: int = 5, reward_per_step: float = 1.0):
-        self.episode_length = episode_length
+        self._episode_length = episode_length
         self.reward_per_step = reward_per_step
         self.step_count = 0
+        self.total_steps = 0
+        self.episode_count = 0
 
     def reset(self):
         self.step_count = 0
-        return jnp.array([0.0, 0.0, 0.0, 0.0])  # CartPole-like observation
+        self.episode_count += 1
+        return jnp.array([0.0, 0.0, 0.0, 0.0])
 
     def step(self, action):
         self.step_count += 1
-        obs = jnp.array([0.1, 0.2, 0.3, 0.4])  # Mock next observation
+        self.total_steps += 1
+        obs = jnp.array([0.1, 0.2, 0.3, 0.4])
         reward = self.reward_per_step
-        done = self.step_count >= self.episode_length
+        done = self.step_count >= self._episode_length
         return obs, reward, done
 
     @property
@@ -42,42 +47,39 @@ class MockEnvironment(EnvironmentABC):
 
     @property
     def max_episode_length(self):
-        """Mock max episode length."""
-        return self.episode_length
+        return self._episode_length
 
     def render(self):
-        """Mock render method."""
         return None
 
     def close(self):
-        """Mock close method."""
         pass
 
 
+class MockState(NamedTuple):
+    """JIT-compatible mock agent state."""
+    dummy: Array
+
+
 class MockAgent(AgentABC):
-    """Mock agent for testing."""
+    """JIT-compatible mock agent for testing the Trainer's training loop."""
 
     def __init__(self, fixed_action: int = 0):
         self.fixed_action = fixed_action
-        self.select_action_calls = []
-        self.update_calls = []
 
     def init_state(self, key):
-        """Create initial mock state."""
-        return {"mock_params": "test"}
+        return MockState(dummy=jnp.array(0.0))
 
     def select_action(self, state, observation, key):
-        self.select_action_calls.append((state, observation, key))
         return jnp.array([self.fixed_action]), state
 
     def update(self, state, obs, action, reward, next_obs, done, key):
-        self.update_calls.append((state, obs, action, reward, next_obs, done, key))
         return state, {}
 
 
 class TestTrainer:
     """Tests for Trainer class."""
-    
+
     def test_trainer_initialization(self):
         """Test trainer initialization."""
         env = MockEnvironment()
@@ -87,7 +89,7 @@ class TestTrainer:
         assert trainer.env == env
         assert trainer.agent == agent
         assert trainer.tracker is None
-        
+
     def test_trainer_initialization_with_tracker(self):
         """Test trainer initialization with tracker."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -97,7 +99,7 @@ class TestTrainer:
             trainer = Trainer(env, agent, tracker=tracker)
 
             assert trainer.tracker == tracker
-        
+
     def test_train_episode(self):
         """Test single episode training."""
         env = MockEnvironment(episode_length=3, reward_per_step=1.0)
@@ -115,14 +117,9 @@ class TestTrainer:
         # Check episode reward
         assert episode_metrics["return"] == 3.0  # 3 steps * 1.0 reward per step
 
-        # Check agent interactions
-        assert len(agent.select_action_calls) == 3
-        assert len(agent.update_calls) == 3
+        # Check correct number of environment steps
+        assert env.step_count == 3
 
-        # Check final update had done=True
-        final_update = agent.update_calls[-1]
-        assert final_update[5] is True
-        
     def test_train_multiple_episodes(self):
         """Test training multiple episodes."""
         env = MockEnvironment(episode_length=2, reward_per_step=2.0)
@@ -135,16 +132,16 @@ class TestTrainer:
 
         trainer.train(state, trainer_key, num_episodes=3)
 
-        # Should have 3 episodes * 2 steps each = 6 total interactions
-        assert len(agent.select_action_calls) == 6
-        assert len(agent.update_calls) == 6
-        
+        # Should have 3 episodes * 2 steps each = 6 total steps
+        assert env.total_steps == 6
+        assert env.episode_count == 3
+
     def test_train_with_tracker(self, capsys):
         """Test training with tracker integration."""
         with tempfile.TemporaryDirectory() as tmpdir:
             env = MockEnvironment(episode_length=2, reward_per_step=1.5)
             agent = MockAgent()
-            tracker = Tracker(log_interval=1, results_dir=tmpdir)  # Log every episode
+            tracker = Tracker(log_interval=1, results_dir=tmpdir)
             trainer = Trainer(env, agent, tracker=tracker)
 
             key = jax.random.PRNGKey(0)
@@ -163,7 +160,7 @@ class TestTrainer:
             captured = capsys.readouterr()
             assert "Episode    1" in captured.out
             assert "Episode    2" in captured.out
-        
+
     def test_train_without_tracker_no_logging(self, capsys):
         """Test that training without tracker produces no log output."""
         env = MockEnvironment(episode_length=1)
@@ -179,7 +176,7 @@ class TestTrainer:
         # Should produce no output
         captured = capsys.readouterr()
         assert captured.out == ""
-        
+
     def test_reproducibility_with_seed(self):
         """Test that same seed produces same behavior."""
         def create_trainer_and_run():
@@ -192,38 +189,31 @@ class TestTrainer:
             state, trainer_key, episode_metrics = trainer.train_episode(
                 state, trainer_key
             )
-            return episode_metrics
+            return episode_metrics, trainer_key
 
-        metrics1 = create_trainer_and_run()
-        metrics2 = create_trainer_and_run()
+        metrics1, key1 = create_trainer_and_run()
+        metrics2, key2 = create_trainer_and_run()
 
         assert metrics1["return"] == metrics2["return"]
-        
+        assert jnp.array_equal(key1, key2)
+
     def test_different_seeds_different_keys(self):
-        """Test that different seeds produce different key sequences."""
-        env = MockEnvironment()
-        agent1 = MockAgent()
-        agent2 = MockAgent()
+        """Test that different seeds produce different key evolution."""
+        def run_episode_with_seed(seed):
+            env = MockEnvironment()
+            agent = MockAgent()
+            trainer = Trainer(env, agent)
+            key = jax.random.PRNGKey(0)
+            state = agent.init_state(key)
+            trainer_key = jax.random.PRNGKey(seed)
+            _, new_trainer_key, _ = trainer.train_episode(state, trainer_key)
+            return new_trainer_key
 
-        trainer1 = Trainer(env, agent1)
-        trainer2 = Trainer(env, agent2)
+        key1 = run_episode_with_seed(1)
+        key2 = run_episode_with_seed(2)
 
-        key1 = jax.random.PRNGKey(0)
-        state1 = agent1.init_state(key1)
-        key2 = jax.random.PRNGKey(0)
-        state2 = agent2.init_state(key2)
+        assert not jnp.array_equal(key1, key2)
 
-        trainer_key1 = jax.random.PRNGKey(1)
-        trainer_key2 = jax.random.PRNGKey(2)
-
-        trainer1.train_episode(state1, trainer_key1)
-        trainer2.train_episode(state2, trainer_key2)
-
-        keys1 = [call[2] for call in agent1.select_action_calls]
-        keys2 = [call[2] for call in agent2.select_action_calls]
-
-        assert any(not jnp.array_equal(k1, k2) for k1, k2 in zip(keys1, keys2))
-        
     def test_key_management(self):
         """Test proper JAX key splitting and management."""
         env = MockEnvironment(episode_length=2)
@@ -238,13 +228,5 @@ class TestTrainer:
             state, initial_key
         )
 
+        # Trainer key should evolve after episode
         assert not jnp.array_equal(new_trainer_key, initial_key)
-
-        action_keys = [call[2] for call in agent.select_action_calls]
-        update_keys = [call[6] for call in agent.update_calls]
-
-        all_keys = action_keys + update_keys
-        for i, key1 in enumerate(all_keys):
-            for j, key2 in enumerate(all_keys):
-                if i != j:
-                    assert not jnp.array_equal(key1, key2)
