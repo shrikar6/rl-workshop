@@ -12,8 +12,10 @@ from framework import (
     AcrobotEnv,
     LunarLanderEnv,
     MLPBackbone,
-    DiscretePolicyHead, 
-    ComposedPolicyNetwork
+    DiscretePolicyHead,
+    ComposedPolicyNetwork,
+    ScalarValueHead,
+    ComposedValueNetwork
 )
 
 
@@ -69,7 +71,28 @@ def composed_policy(mlp_backbone, discrete_head):
 def policy_params(composed_policy, cartpole_env, random_key):
     """Provides initialized policy parameters for testing."""
     return composed_policy.init_params(
-        random_key, 
-        cartpole_env.observation_space, 
+        random_key,
+        cartpole_env.observation_space,
         cartpole_env.action_space
+    )
+
+
+@pytest.fixture
+def scalar_value_head():
+    """Provides a scalar value head for testing."""
+    return ScalarValueHead(input_dim=16)
+
+
+@pytest.fixture
+def composed_value_network(mlp_backbone, scalar_value_head):
+    """Provides a composed value network for testing."""
+    return ComposedValueNetwork(mlp_backbone, scalar_value_head)
+
+
+@pytest.fixture
+def value_params(composed_value_network, cartpole_env, random_key):
+    """Provides initialized value network parameters for testing."""
+    return composed_value_network.init_params(
+        random_key,
+        cartpole_env.observation_space
     )

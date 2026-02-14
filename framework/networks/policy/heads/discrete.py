@@ -111,9 +111,7 @@ class DiscretePolicyHead(PolicyHeadABC):
         
         # Xavier initialization: scale = sqrt(2 / (fan_in + fan_out))
         scale = jnp.sqrt(2.0 / (self.input_dim + num_actions))
-        w_key, b_key = jax.random.split(key)
-        
-        w = jax.random.normal(w_key, (self.input_dim, num_actions)) * scale
+        w = jax.random.normal(key, (self.input_dim, num_actions)) * scale
         b = jnp.zeros(num_actions)
         
         return (w, b)

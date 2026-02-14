@@ -14,3 +14,5 @@ from .environments.lunarlander import LunarLanderEnv
 from .networks.policy.composed import ComposedPolicyNetwork
 from .networks.backbones.mlp import MLPBackbone
 from .networks.policy.heads.discrete import DiscretePolicyHead
+from .networks.value.composed import ComposedValueNetwork
+from .networks.value.heads.scalar import ScalarValueHead
