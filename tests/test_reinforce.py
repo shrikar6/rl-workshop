@@ -282,6 +282,56 @@ class TestREINFORCEAgent:
         assert jnp.isfinite(metrics["grad_norm"])
         assert metrics["grad_norm"] > 0
     
+    def test_normalization_padding_invariance(self):
+        """Advantage normalization should be invariant to buffer padding.
+
+        Regression test: previously, the squared_diff computation did not mask
+        padding positions, so (0 - mean_adv)^2 at padding would pollute variance
+        and produce different normalizations for different max_episode_length values.
+        With the fix, loss should be identical regardless of buffer size.
+        """
+        env = CartPoleEnv()
+
+        def build_and_compute_loss(max_len):
+            policy = ComposedPolicyNetwork(
+                backbone=MLPBackbone(hidden_dims=[32], output_dim=16),
+                head=DiscretePolicyHead(input_dim=16)
+            )
+            agent = REINFORCEAgent(
+                policy=policy,
+                observation_space=env.observation_space,
+                action_space=env.action_space,
+                max_episode_length=max_len,
+                learning_rate=1e-3,
+                gamma=0.99,
+                normalize_advantages=True,
+            )
+            state = agent.init_state(jax.random.PRNGKey(0))
+
+            # Identical episode data across both buffer sizes
+            episode_length = 3
+            rewards = jnp.array([3.0, 2.0, 1.0])
+            obs_array = jnp.tile(jnp.array([0.1, 0.2, 0.3, 0.4]), (episode_length, 1))
+            actions = jnp.zeros((episode_length, 1))
+
+            test_state = state._replace(
+                episode_rewards=state.episode_rewards.at[:episode_length].set(rewards),
+                episode_observations=state.episode_observations.at[:episode_length].set(obs_array),
+                episode_actions=state.episode_actions.at[:episode_length].set(actions),
+                episode_length=episode_length,
+                baseline=0.0,
+            )
+            _, _, _, metrics = agent._update_policy(test_state)
+            return metrics["policy_loss"]
+
+        loss_small = build_and_compute_loss(max_len=5)
+        loss_large = build_and_compute_loss(max_len=50)
+
+        assert jnp.isclose(loss_small, loss_large, atol=1e-5), (
+            f"Policy loss should be invariant to buffer padding, "
+            f"got {loss_small} (max_len=5) vs {loss_large} (max_len=50)"
+        )
+
     def test_baseline_with_different_alpha(self):
         """Test baseline update with different alpha values."""
         env = CartPoleEnv()

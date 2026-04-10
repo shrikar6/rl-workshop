@@ -298,9 +298,10 @@ class REINFORCEAgent(AgentABC):
 
         # Optionally normalize advantages by std to reduce variance
         if self.normalize_advantages:
-            # Compute std only over valid advantages (padding already = 0)
+            # Compute std only over valid advantages. Squared diff must be masked
+            # because (0 - mean_adv)^2 at padding positions would pollute the variance.
             mean_adv = jnp.sum(advantages) / state.episode_length
-            squared_diff = (advantages - mean_adv) ** 2
+            squared_diff = jnp.where(mask, (advantages - mean_adv) ** 2, 0.0)
             variance = jnp.sum(squared_diff) / state.episode_length
             std = jnp.sqrt(variance)
             std_clamped = jnp.maximum(std, 1e-3)  # Clamp to prevent division by ~0
