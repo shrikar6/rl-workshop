@@ -8,6 +8,7 @@ focus on simplicity, modularity, and ease of experimentation.
 from .trainer import Trainer
 from .tracking import Tracker
 from .agents.reinforce import REINFORCEAgent
+from .agents.a2c import A2CAgent
 from .environments.cartpole import CartPoleEnv
 from .environments.acrobot import AcrobotEnv
 from .environments.lunarlander import LunarLanderEnv

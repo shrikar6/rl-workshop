@@ -12,6 +12,22 @@ Design decisions specific to the networks subsystem. For framework-wide patterns
 
 This structure clarifies what's a fundamental framework concept versus what's domain-specific, and keeps related domain abstractions together.
 
+## Policy vs Value Network Hierarchies
+
+**What:** Networks are split into two parallel hierarchies, `networks/policy/` and `networks/value/`, each with its own domain ABC pair (`PolicyNetworkABC`/`PolicyHeadABC`, `ValueNetworkABC`/`ValueHeadABC`).
+
+**Why not reuse policy classes for value networks?**
+
+Policy and value networks have genuinely different APIs:
+
+- Policy networks expose `sample_action(params, obs, key)` and `get_log_prob(params, obs, action)`. Value networks only need `forward(params, obs)`.
+- `PolicyHeadABC.init_params(key, action_space)` requires the action space to size the output. `ValueHeadABC.init_params(key)` does not — value heads always output a scalar (or vector, for distributional RL) that is independent of the action space.
+- `PolicyNetworkABC.init_params(key, obs_space, action_space)` vs `ValueNetworkABC.init_params(key, obs_space)`.
+
+Forcing a shared type would require either leaky optional parameters (`action_space=None` for value heads) or a lowest-common-denominator API that hides the real semantics. Two parallel hierarchies keep each API honest.
+
+**What IS shared:** Backbones. `MLPBackbone` is used by both policy and value networks — feature extraction is task-agnostic and should not be duplicated. This is the mirror-image of the "same backbone, different heads" design philosophy from the next section: policies and values share backbones and diverge at the head.
+
 ## Architecture: Backbone/Head Separation
 
 **What:** Networks are composed from two independent pieces:
@@ -52,10 +68,10 @@ policy_continuous = ComposedPolicyNetwork(backbone, head_continuous)
 
 **Head:**
 - Input: Features from backbone
-- Output: Task-specific outputs (action logits, Q-values, etc.)
-- Examples: DiscretePolicyHead, ContinuousPolicyHead (future), ValueHead (future)
+- Output: Task-specific outputs (action logits, state values, Q-values, etc.)
+- Examples: DiscretePolicyHead, ScalarValueHead, ContinuousPolicyHead (future)
 
-**ComposedNetwork:**
+**ComposedNetwork (ComposedPolicyNetwork, ComposedValueNetwork):**
 - Orchestrates backbone and head
 - Validates dimension compatibility (backbone.output_dim must equal head.input_dim)
 - Parameters structure: Tuple of (backbone_params, head_params)
@@ -108,7 +124,7 @@ class MyBackbone(BackboneABC):
 ### Creating a New Head
 
 ```python
-class MyHead(PolicyHeadABC):  # or ValueHeadABC, etc.
+class MyPolicyHead(PolicyHeadABC):
     def __init__(self, input_dim, my_config):
         super().__init__(input_dim)
         self.my_config = my_config  # Immutable after init
@@ -118,7 +134,19 @@ class MyHead(PolicyHeadABC):  # or ValueHeadABC, etc.
         return params
 
     def forward(self, params, features):
-        # Access instance attributes directly - JAX will trace them
+        return output
+
+
+class MyValueHead(ValueHeadABC):
+    def __init__(self, input_dim, my_config):
+        super().__init__(input_dim)
+        self.my_config = my_config
+
+    def init_params(self, key):
+        # Value heads do NOT take action_space - value is a function of state only
+        return params
+
+    def forward(self, params, features):
         return output
 ```
 
@@ -127,7 +155,8 @@ class MyHead(PolicyHeadABC):  # or ValueHeadABC, etc.
 ## Current Implementations
 
 - **Backbones:** MLPBackbone
-- **Heads:** DiscretePolicyHead
-- **Networks:** ComposedPolicyNetwork
+- **Policy heads:** DiscretePolicyHead
+- **Value heads:** ScalarValueHead
+- **Networks:** ComposedPolicyNetwork, ComposedValueNetwork
 
 See docstrings for detailed usage.

@@ -323,15 +323,18 @@ class A2CAgent(AgentABC):
             rewards, values, self.gamma, self.gae_lambda, mask, state.episode_length
         )
 
-        # Optional advantage normalization. Squared diff must be masked because
-        # (0 - mean_adv)^2 at padding positions would pollute the variance.
+        # Optional full z-score normalization: (advantages - mean) / std.
+        # A2C can safely subtract the mean because the baseline is a learned
+        # value function (not a scalar that would cancel with mean subtraction).
+        # Squared diff and mean-centered advantages must both be re-masked because
+        # the mean is non-zero at padding positions after subtraction.
         if self.normalize_advantages:
             mean_adv = jnp.sum(advantages) / state.episode_length
             squared_diff = jnp.where(mask, (advantages - mean_adv) ** 2, 0.0)
             variance = jnp.sum(squared_diff) / state.episode_length
             std = jnp.sqrt(variance)
             std_clamped = jnp.maximum(std, 1e-3)
-            advantages = advantages / std_clamped
+            advantages = jnp.where(mask, (advantages - mean_adv) / std_clamped, 0.0)
 
         # --- Policy update ---
         def policy_loss(params):
